@@ -1,0 +1,40 @@
+[project]
+name = "claidet"
+version = "0.1.0"
+description = "Extraction de recettes structurées depuis des liens Instagram"
+requires-python = ">=3.11"
+readme = "README.md"
+
+dependencies = [
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# Le moteur d'extraction complet (téléchargement, transcription, reconstruction LLM).
+# Séparé du coeur car ce sont les dépendances les plus lourdes / les plus souvent
+# remplacées (ex: un autre moteur de transcription, un autre fournisseur LLM).
+engine = [
+    "yt-dlp>=2024.1.0",
+    "faster-whisper>=1.0",
+    "anthropic>=0.40",
+]
+# L'application de bureau. Ne doit JAMAIS être importée par le package `engine`
+# ou `storage` : c'est la seule couche autorisée à dépendre d'un toolkit UI.
+desktop = [
+    "PySide6>=6.6",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.14",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+include = ["engine*", "storage*", "desktop*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
