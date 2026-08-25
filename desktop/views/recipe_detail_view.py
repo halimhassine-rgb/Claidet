@@ -61,8 +61,11 @@ class RecipeDetailView(QWidget):
         self._category_pill = QLabel()
         self._servings_label = QLabel()
         self._servings_label.setProperty("role", "muted")
+
+        # Juste sous la photo : le lien le plus direct vers la source,
+        # avant même le titre, sur sa propre ligne.
         self._source_link = QLabel()
-        self._source_link.setProperty("role", "muted")
+        self._source_link.setStyleSheet("font-weight: 600; font-size: 13px;")
         self._source_link.setOpenExternalLinks(False)
         self._source_link.linkActivated.connect(self._open_source)
 
@@ -70,11 +73,11 @@ class RecipeDetailView(QWidget):
         meta_row.setSpacing(12)
         meta_row.addWidget(self._category_pill)
         meta_row.addWidget(self._servings_label)
-        meta_row.addWidget(self._source_link)
         meta_row.addStretch(1)
 
         title_block = QVBoxLayout()
         title_block.setSpacing(10)
+        title_block.addWidget(self._source_link)
         title_block.addWidget(self._title_label)
         title_block.addLayout(meta_row)
 
