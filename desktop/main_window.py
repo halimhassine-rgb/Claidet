@@ -87,6 +87,7 @@ class MainWindow(QMainWindow):
 
     def _on_extraction_succeeded(self, result: ExtractionResult) -> None:
         self._url_view.set_busy(False)
+        self._review_view.set_available_categories(self._repository.list_categories())
         self._review_view.load_from_result(result)
         self._stack.setCurrentWidget(self._review_view)
 
@@ -100,6 +101,7 @@ class MainWindow(QMainWindow):
         )
 
     def _start_manual_entry(self) -> None:
+        self._review_view.set_available_categories(self._repository.list_categories())
         self._review_view.load_blank()
         self._stack.setCurrentWidget(self._review_view)
 
@@ -113,6 +115,7 @@ class MainWindow(QMainWindow):
         recipe = self._repository.get(recipe_id)
         if recipe is None:
             return
+        self._review_view.set_available_categories(self._repository.list_categories())
         self._review_view.load_from_recipe(recipe)
         self._stack.setCurrentWidget(self._review_view)
 

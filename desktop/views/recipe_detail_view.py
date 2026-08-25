@@ -40,6 +40,8 @@ class RecipeDetailView(QWidget):
 
         self._title_label = QLabel()
         self._title_label.setStyleSheet("font-size: 20px; font-weight: bold;")
+        self._category_label = QLabel()
+        self._category_label.setStyleSheet("color: #555; font-weight: bold;")
         self._servings_label = QLabel()
         self._cover_label = QLabel()
         self._cover_label.setFixedSize(200, 200)
@@ -49,6 +51,7 @@ class RecipeDetailView(QWidget):
         top_row = QHBoxLayout()
         title_col = QVBoxLayout()
         title_col.addWidget(self._title_label)
+        title_col.addWidget(self._category_label)
         title_col.addWidget(self._servings_label)
         title_col.addStretch(1)
         top_row.addLayout(title_col, 3)
@@ -78,6 +81,8 @@ class RecipeDetailView(QWidget):
     def load_recipe(self, recipe: Recipe) -> None:
         self._recipe_id = recipe.id
         self._title_label.setText(recipe.title)
+        self._category_label.setText(recipe.category or "")
+        self._category_label.setVisible(bool(recipe.category))
         self._servings_label.setText(recipe.servings or "")
 
         if recipe.cover_image_path and Path(recipe.cover_image_path).exists():

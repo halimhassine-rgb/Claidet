@@ -16,6 +16,7 @@ from pathlib import Path
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
@@ -29,7 +30,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from engine.models import ExtractionResult, ExtractionStatus, Ingredient, Recipe, Step
+from engine.models import (
+    ExtractionResult,
+    ExtractionStatus,
+    Ingredient,
+    Recipe,
+    Step,
+    SUGGESTED_CATEGORIES,
+)
 
 _INGREDIENT_COLUMNS = ("Ingrédient", "Quantité", "Note")
 
@@ -49,6 +57,11 @@ class RecipeReviewView(QWidget):
         self._error_label.hide()
 
         self._title_edit = QLineEdit()
+        self._category_combo = QComboBox()
+        self._category_combo.setEditable(True)
+        self._category_combo.addItem("")  # aucune catégorie
+        self._category_combo.addItems(SUGGESTED_CATEGORIES)
+        self._category_combo.lineEdit().setPlaceholderText("Aucune, ou tapez la vôtre")
         self._servings_edit = QLineEdit()
         self._servings_edit.setPlaceholderText("ex : 4 personnes")
 
@@ -105,6 +118,8 @@ class RecipeReviewView(QWidget):
         form_col = QVBoxLayout()
         form_col.addWidget(QLabel("Titre"))
         form_col.addWidget(self._title_edit)
+        form_col.addWidget(QLabel("Catégorie"))
+        form_col.addWidget(self._category_combo)
         form_col.addWidget(QLabel("Portions"))
         form_col.addWidget(self._servings_edit)
         top_row.addLayout(form_col, 3)
@@ -122,6 +137,20 @@ class RecipeReviewView(QWidget):
         layout.addWidget(self._notes_edit)
         layout.addWidget(self._raw_group)
         layout.addLayout(buttons_row)
+
+    # -- Catégories disponibles -----------------------------------------
+
+    def set_available_categories(self, categories: list[str]) -> None:
+        """Propose, en plus des suggestions de base, les catégories déjà
+        utilisées dans la base — pour ne jamais avoir à les retaper."""
+        current = self._category_combo.currentText()
+        extra = sorted(c for c in categories if c not in SUGGESTED_CATEGORIES)
+        self._category_combo.blockSignals(True)
+        self._category_combo.clear()
+        self._category_combo.addItem("")
+        self._category_combo.addItems(list(SUGGESTED_CATEGORIES) + extra)
+        self._category_combo.setCurrentText(current)
+        self._category_combo.blockSignals(False)
 
     # -- Chargement -------------------------------------------------
 
@@ -158,6 +187,7 @@ class RecipeReviewView(QWidget):
     def _load_recipe_fields(self, recipe: Recipe) -> None:
         self._reset_fields()
         self._title_edit.setText(recipe.title)
+        self._category_combo.setCurrentText(recipe.category or "")
         self._servings_edit.setText(recipe.servings or "")
         for ingredient in recipe.ingredients:
             self._add_ingredient_row(ingredient.name, ingredient.quantity or "", ingredient.note or "")
@@ -172,6 +202,7 @@ class RecipeReviewView(QWidget):
         self._cover_label.setPixmap(QPixmap())
         self._cover_label.setText("Pas d'image")
         self._title_edit.clear()
+        self._category_combo.setCurrentText("")
         self._servings_edit.clear()
         self._ingredients_table.setRowCount(0)
         self._steps_edit.clear()
@@ -204,6 +235,7 @@ class RecipeReviewView(QWidget):
         base = self._base_recipe
         kwargs = dict(
             title=self._title_edit.text().strip() or "Recette sans titre",
+            category=self._category_combo.currentText().strip() or None,
             servings=self._servings_edit.text().strip() or None,
             ingredients=ingredients,
             steps=steps,

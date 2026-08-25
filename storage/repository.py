@@ -52,12 +52,14 @@ class RecipeRepository:
         self._conn.execute(
             """
             INSERT INTO recipes (
-                id, source_url, title, servings, ingredients_json, steps_json,
-                notes, cover_image_path, extraction_method, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                id, source_url, title, category, servings, ingredients_json,
+                steps_json, notes, cover_image_path, extraction_method,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 source_url=excluded.source_url,
                 title=excluded.title,
+                category=excluded.category,
                 servings=excluded.servings,
                 ingredients_json=excluded.ingredients_json,
                 steps_json=excluded.steps_json,
@@ -70,6 +72,7 @@ class RecipeRepository:
                 persisted.id,
                 persisted.source_url,
                 persisted.title,
+                persisted.category,
                 persisted.servings,
                 json.dumps([i.model_dump() for i in persisted.ingredients]),
                 json.dumps([s.model_dump() for s in persisted.steps]),
@@ -94,6 +97,15 @@ class RecipeRepository:
             "SELECT * FROM recipes ORDER BY updated_at DESC"
         ).fetchall()
         return [_row_to_recipe(row) for row in rows]
+
+    def list_categories(self) -> list[str]:
+        """Catégories réellement utilisées dans la base, y compris celles
+        tapées à la main par l'utilisateur (pas seulement SUGGESTED_CATEGORIES)."""
+        rows = self._conn.execute(
+            "SELECT DISTINCT category FROM recipes WHERE category IS NOT NULL "
+            "AND category != '' ORDER BY category"
+        ).fetchall()
+        return [row["category"] for row in rows]
 
     def delete(self, recipe_id: str) -> None:
         recipe = self.get(recipe_id)
@@ -125,6 +137,7 @@ def _row_to_recipe(row: sqlite3.Row) -> Recipe:
         id=row["id"],
         source_url=row["source_url"],
         title=row["title"],
+        category=row["category"],
         servings=row["servings"],
         ingredients=[Ingredient(**d) for d in json.loads(row["ingredients_json"])],
         steps=[Step(**d) for d in json.loads(row["steps_json"])],

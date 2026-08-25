@@ -7,6 +7,7 @@ from storage.repository import RecipeRepository
 def _make_recipe(**overrides) -> Recipe:
     defaults = dict(
         title="Salade de pâtes",
+        category="Entrée",
         servings="4 personnes",
         ingredients=[Ingredient(name="Pâtes", quantity="300 g")],
         steps=[Step(order=1, text="Cuire les pâtes")],
@@ -25,6 +26,7 @@ def test_save_and_get_roundtrip(tmp_path):
 
     assert fetched is not None
     assert fetched.title == "Salade de pâtes"
+    assert fetched.category == "Entrée"
     assert fetched.ingredients[0].name == "Pâtes"
     assert fetched.steps[0].text == "Cuire les pâtes"
 
@@ -72,6 +74,16 @@ def test_list_all_orders_by_updated_at_desc(tmp_path):
     recipes = repo.list_all()
 
     assert [r.title for r in recipes] == ["Récente", "Ancienne"]
+
+
+def test_list_categories_returns_distinct_used_categories(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    repo.save(_make_recipe(title="Salade", category="Entrée"))
+    repo.save(_make_recipe(title="Tiramisu", category="Dessert"))
+    repo.save(_make_recipe(title="Autre salade", category="Entrée"))
+    repo.save(_make_recipe(title="Sans catégorie", category=None))
+
+    assert repo.list_categories() == ["Dessert", "Entrée"]
 
 
 def test_delete_removes_recipe_and_cover_file(tmp_path):

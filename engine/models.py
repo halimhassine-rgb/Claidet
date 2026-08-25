@@ -37,6 +37,19 @@ class ExtractionStatus(str, Enum):
     FAILED = "failed"
 
 
+# Suggestions proposées dans l'UI et au modèle de reconstruction ; le champ
+# `Recipe.category` reste du texte libre (l'utilisateur garde la main pour
+# taper autre chose), ce n'est qu'une liste de départ.
+SUGGESTED_CATEGORIES = (
+    "Entrée",
+    "Plat",
+    "Dessert",
+    "Apéritif",
+    "Accompagnement",
+    "Boisson",
+)
+
+
 class Ingredient(BaseModel):
     name: str
     # Texte libre ("200 g", "1/2 cuillère à café", "au goût") plutôt que
@@ -60,6 +73,9 @@ class Recipe(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     source_url: str | None = None
     title: str
+    # Texte libre plutôt qu'un enum : les suggestions de SUGGESTED_CATEGORIES
+    # guident la saisie sans jamais l'empêcher de taper autre chose.
+    category: str | None = None
     servings: str | None = None
     ingredients: list[Ingredient] = Field(default_factory=list)
     steps: list[Step] = Field(default_factory=list)

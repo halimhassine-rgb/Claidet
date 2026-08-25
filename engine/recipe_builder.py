@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Protocol
 
 from engine.exceptions import RecipeReconstructionError
-from engine.models import Ingredient, Recipe, Step
+from engine.models import Ingredient, Recipe, Step, SUGGESTED_CATEGORIES
 
-_SYSTEM_PROMPT = """\
+_SYSTEM_PROMPT = f"""\
 Tu extrais une recette de cuisine structurée à partir de trois sources \
 possibles, toutes issues de la même vidéo Instagram : la transcription \
 audio, la légende du post, et des images clés extraites de la vidéo \
@@ -27,14 +27,19 @@ audio, la légende du post, et des images clés extraites de la vidéo \
 incrusté à l'écran (généralement plus précis que l'audio) puis la légende.
 
 Réponds UNIQUEMENT avec un objet JSON, sans texte autour, au format exact :
-{
+{{
   "title": string,
+  "category": string ou null,
   "servings": string ou null,
-  "ingredients": [{"name": string, "quantity": string ou null, "note": string ou null}],
+  "ingredients": [{{"name": string, "quantity": string ou null, "note": string ou null}}],
   "steps": [string, ...],
   "notes": string ou null
-}
+}}
 Les étapes doivent être dans l'ordre d'exécution, une action par étape.
+Pour "category", choisis de préférence parmi : {", ".join(SUGGESTED_CATEGORIES)} \
+— ou une autre catégorie courte si aucune ne convient. Ce n'est qu'une \
+suggestion que l'utilisateur pourra corriger, ne force pas une catégorie \
+si le contenu est ambigu : mets null dans ce cas.
 Si une information est réellement absente des sources, mets null plutôt \
 que d'inventer."""
 
@@ -157,6 +162,7 @@ def _payload_to_recipe(payload: dict, *, source_url: str | None) -> Recipe:
     return Recipe(
         source_url=source_url,
         title=title,
+        category=payload.get("category"),
         servings=payload.get("servings"),
         ingredients=ingredients,
         steps=steps,

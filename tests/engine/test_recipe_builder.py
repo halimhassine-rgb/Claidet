@@ -36,6 +36,7 @@ def _valid_payload_text() -> str:
     return json.dumps(
         {
             "title": "Pâtes au pesto",
+            "category": "Plat",
             "servings": "2 personnes",
             "ingredients": [{"name": "Pâtes", "quantity": "200 g", "note": None}],
             "steps": ["Cuire les pâtes", "Ajouter le pesto"],
@@ -56,6 +57,7 @@ def test_reconstruct_parses_valid_json():
     )
 
     assert recipe.title == "Pâtes au pesto"
+    assert recipe.category == "Plat"
     assert recipe.servings == "2 personnes"
     assert [i.name for i in recipe.ingredients] == ["Pâtes"]
     assert [s.text for s in recipe.steps] == ["Cuire les pâtes", "Ajouter le pesto"]
