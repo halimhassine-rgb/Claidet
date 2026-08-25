@@ -28,6 +28,11 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.14",
 ]
+# Pour produire un exécutable à double-cliquer (voir scripts/build_*).
+build = [
+    "pyinstaller>=6.0",
+    "pillow>=10.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

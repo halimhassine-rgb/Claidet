@@ -90,6 +90,35 @@ de saisie manuelle fonctionne.
 python -m desktop.app
 ```
 
+## Construire un exécutable à double-cliquer
+
+Pour éviter de repasser par le Terminal à chaque lancement :
+
+```bash
+# macOS
+bash scripts/build_macos.sh      # produit dist/Reelicious.app
+
+# Windows (PowerShell)
+scripts\build_windows.ps1        # produit dist\Reelicious\Reelicious.exe
+```
+
+Ces scripts s'appuient sur PyInstaller (`pip install -e ".[build]"`) et
+sur `scripts/generate_icon.py`, qui régénère `assets/icon.png` /
+`assets/icon.ico` à partir des couleurs de `desktop/theme.py` — utile si
+la charte visuelle change. La construction doit se faire sur le système
+cible (un `.app` se construit sur Mac, un `.exe` sur Windows) : pas de
+compilation croisée.
+
+## Exporter / importer ses recettes
+
+Depuis l'écran d'accueil, le menu **⋯** propose « Exporter mes
+recettes… » et « Importer des recettes… ». L'export produit une
+archive `.zip` autoportante (un manifeste JSON + les images de
+couverture) — pour migrer vers un autre ordinateur : exporter sur
+l'ancien poste, transférer le fichier (clé USB, cloud, email), puis
+importer sur le nouveau. Réimporter une archive déjà importée met à
+jour les recettes existantes plutôt que de les dupliquer (`storage/backup.py`).
+
 ## Configuration
 
 Variables d'environnement (toutes optionnelles sauf `ANTHROPIC_API_KEY`

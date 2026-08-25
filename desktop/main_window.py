@@ -9,7 +9,10 @@ chargement/construction sur des objets `Recipe`/`ExtractionResult`.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QMainWindow, QMessageBox, QStackedWidget
+from datetime import date
+from pathlib import Path
+
+from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QStackedWidget
 
 from desktop.controllers.extraction_worker import ExtractionWorker
 from desktop.views.recipe_detail_view import RecipeDetailView
@@ -19,6 +22,7 @@ from desktop.views.url_input_view import UrlInputView
 from engine.config import EngineConfig
 from engine.models import ExtractionResult, Recipe
 from engine.pipeline import ExtractionPipeline
+from storage import backup
 from storage.repository import RecipeRepository
 
 
@@ -44,6 +48,8 @@ class MainWindow(QMainWindow):
 
         self._list_view.new_recipe_requested.connect(self._show_url_view)
         self._list_view.recipe_selected.connect(self._show_detail_view)
+        self._list_view.export_requested.connect(self._export_recipes)
+        self._list_view.import_requested.connect(self._import_recipes)
 
         self._url_view.extract_requested.connect(self._start_extraction)
         self._url_view.manual_requested.connect(self._start_manual_entry)
@@ -126,3 +132,45 @@ class MainWindow(QMainWindow):
         if confirm == QMessageBox.Yes:
             self._repository.delete(recipe_id)
             self._show_list_view()
+
+    # -- Export / import (migration vers un autre ordinateur) -----------
+
+    def _export_recipes(self) -> None:
+        default_name = f"reelicious-recettes-{date.today().isoformat()}.zip"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Exporter mes recettes", default_name, "Archive (*.zip)"
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".zip"):
+            path += ".zip"
+
+        try:
+            count = backup.export_to_zip(self._repository, Path(path))
+        except OSError as exc:
+            QMessageBox.critical(self, "Échec de l'export", str(exc))
+            return
+
+        QMessageBox.information(
+            self,
+            "Export terminé",
+            f"{count} recette(s) exportée(s) dans {Path(path).name}.\n\n"
+            "Copiez ce fichier sur l'autre ordinateur (clé USB, cloud, email) "
+            "puis utilisez « Importer des recettes » là-bas.",
+        )
+
+    def _import_recipes(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Importer des recettes", "", "Archive (*.zip)"
+        )
+        if not path:
+            return
+
+        try:
+            count = backup.import_from_zip(self._repository, Path(path))
+        except (backup.BackupError, OSError) as exc:
+            QMessageBox.critical(self, "Échec de l'import", str(exc))
+            return
+
+        self._show_list_view()
+        QMessageBox.information(self, "Import terminé", f"{count} recette(s) importée(s).")

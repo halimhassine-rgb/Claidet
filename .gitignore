@@ -4,7 +4,10 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+*.spec
 .pytest_cache/
 .env
 .reelicious/
 *.db
+assets/icon.icns
+assets/icon.iconset/

@@ -92,24 +92,27 @@ def build_stylesheet() -> str:
     QLabel[role="muted"] {{ color: {INK_SOFT}; }}
     QLabel[role="faint"] {{ color: {INK_SOFT}; font-size: 12px; }}
 
-    QPushButton {{
+    QPushButton, QToolButton {{
         border-radius: 10px;
         padding: 9px 16px;
         font-weight: 600;
         font-size: 12.5px;
         border: 1px solid transparent;
     }}
+    QToolButton::menu-indicator {{ image: none; width: 0; }}
     QPushButton[variant="primary"] {{
         background: {ACCENT};
         color: {SURFACE};
     }}
     QPushButton[variant="primary"]:hover {{ background: {ACCENT_HOVER}; }}
-    QPushButton[variant="secondary"] {{
+    QPushButton[variant="secondary"], QToolButton[variant="secondary"] {{
         background: {SURFACE};
         color: {INK};
         border: 1px solid {LINE};
     }}
-    QPushButton[variant="secondary"]:hover {{ background: {SURFACE_SUNKEN}; }}
+    QPushButton[variant="secondary"]:hover, QToolButton[variant="secondary"]:hover {{
+        background: {SURFACE_SUNKEN};
+    }}
     QPushButton[variant="ghost"] {{
         background: transparent;
         color: {INK_SOFT};
@@ -155,6 +158,22 @@ def build_stylesheet() -> str:
         border: none;
         padding: 6px;
         font-weight: 600;
+    }}
+
+    QMenu {{
+        background: {SURFACE};
+        border: 1px solid {LINE};
+        border-radius: 10px;
+        padding: 6px;
+    }}
+    QMenu::item {{
+        padding: 8px 14px;
+        border-radius: 7px;
+        color: {INK};
+    }}
+    QMenu::item:selected {{
+        background: {ACCENT_TINT};
+        color: {ACCENT_DEEP};
     }}
 
     QGroupBox {{

@@ -13,8 +13,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QPushButton,
     QScrollArea,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -91,6 +93,8 @@ class _RecipeCard(QFrame):
 class RecipeListView(QWidget):
     recipe_selected = Signal(str)  # recipe id
     new_recipe_requested = Signal()
+    export_requested = Signal()
+    import_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -115,6 +119,15 @@ class RecipeListView(QWidget):
         header_left.addWidget(mark)
         header_left.addLayout(title_col)
 
+        more_button = QToolButton()
+        more_button.setText("⋯")
+        more_button.setProperty("variant", "secondary")
+        more_button.setPopupMode(QToolButton.InstantPopup)
+        more_menu = QMenu(more_button)
+        more_menu.addAction("Exporter mes recettes…", self.export_requested.emit)
+        more_menu.addAction("Importer des recettes…", self.import_requested.emit)
+        more_button.setMenu(more_menu)
+
         new_button = QPushButton("+  Nouvelle recette")
         new_button.setProperty("variant", "primary")
         new_button.clicked.connect(self.new_recipe_requested.emit)
@@ -122,6 +135,7 @@ class RecipeListView(QWidget):
         header = QHBoxLayout()
         header.addLayout(header_left)
         header.addStretch(1)
+        header.addWidget(more_button)
         header.addWidget(new_button)
 
         self._filter_group = QButtonGroup(self)
