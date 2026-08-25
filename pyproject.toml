@@ -1,5 +1,5 @@
 [project]
-name = "claidet"
+name = "reelicious"
 version = "0.1.0"
 description = "Extraction de recettes structurées depuis des liens Instagram"
 requires-python = ">=3.11"

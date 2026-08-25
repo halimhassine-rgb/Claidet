@@ -16,7 +16,7 @@ load_dotenv()
 
 
 def _default_data_dir() -> Path:
-    return Path.home() / ".claidet"
+    return Path.home() / ".reelicious"
 
 
 @dataclass(frozen=True)
@@ -38,15 +38,15 @@ class EngineConfig:
 
     @classmethod
     def from_env(cls) -> "EngineConfig":
-        data_dir = Path(os.environ.get("CLAIDET_DATA_DIR", str(_default_data_dir())))
+        data_dir = Path(os.environ.get("REELICIOUS_DATA_DIR", str(_default_data_dir())))
         return cls(
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY"),
-            claude_model=os.environ.get("CLAIDET_CLAUDE_MODEL", "claude-sonnet-5"),
-            whisper_model_size=os.environ.get("CLAIDET_WHISPER_SIZE", "small"),
-            whisper_device=os.environ.get("CLAIDET_WHISPER_DEVICE", "cpu"),
-            whisper_compute_type=os.environ.get("CLAIDET_WHISPER_COMPUTE", "int8"),
+            claude_model=os.environ.get("REELICIOUS_CLAUDE_MODEL", "claude-sonnet-5"),
+            whisper_model_size=os.environ.get("REELICIOUS_WHISPER_SIZE", "small"),
+            whisper_device=os.environ.get("REELICIOUS_WHISPER_DEVICE", "cpu"),
+            whisper_compute_type=os.environ.get("REELICIOUS_WHISPER_COMPUTE", "int8"),
             data_dir=data_dir,
-            max_key_frames=int(os.environ.get("CLAIDET_MAX_KEY_FRAMES", "6")),
+            max_key_frames=int(os.environ.get("REELICIOUS_MAX_KEY_FRAMES", "6")),
         )
 
     @property
@@ -63,7 +63,7 @@ class EngineConfig:
 
     @property
     def db_path(self) -> Path:
-        return self.data_dir / "claidet.db"
+        return self.data_dir / "reelicious.db"
 
     def ensure_dirs(self) -> None:
         for d in (self.downloads_dir, self.frames_dir, self.covers_dir):

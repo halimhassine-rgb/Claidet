@@ -109,7 +109,7 @@ class ExtractionPipeline:
         report(PipelineStage.AUDIO_EXTRACTION)
         # L'audio n'est utile que le temps de la transcription : un
         # répertoire temporaire, nettoyé automatiquement, suffit.
-        with tempfile.TemporaryDirectory(prefix="claidet_audio_") as tmp:
+        with tempfile.TemporaryDirectory(prefix="reelicious_audio_") as tmp:
             try:
                 audio_path = extract_audio(downloaded.video_path, Path(tmp))
             except AudioExtractionError as exc:

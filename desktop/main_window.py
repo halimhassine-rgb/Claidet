@@ -25,7 +25,7 @@ from storage.repository import RecipeRepository
 class MainWindow(QMainWindow):
     def __init__(self, config: EngineConfig, repository: RecipeRepository) -> None:
         super().__init__()
-        self.setWindowTitle("Claidet — Recettes Instagram")
+        self.setWindowTitle("Reelicious — Recettes Instagram")
         self.resize(900, 700)
 
         self._repository = repository

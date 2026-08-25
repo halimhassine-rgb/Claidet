@@ -1,4 +1,4 @@
-# Claidet
+# Reelicious
 
 Application de bureau mono-utilisateur qui transforme un lien Instagram
 (reel de recette) en fiche recette structurée : titre, portions,
@@ -98,11 +98,11 @@ pour l'extraction automatique) :
 | Variable | Défaut | Rôle |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Clé API pour la reconstruction de recette |
-| `CLAIDET_CLAUDE_MODEL` | `claude-sonnet-5` | Modèle utilisé |
-| `CLAIDET_WHISPER_SIZE` | `small` | Taille du modèle faster-whisper |
-| `CLAIDET_WHISPER_DEVICE` | `cpu` | `cpu` ou `cuda` |
-| `CLAIDET_DATA_DIR` | `~/.claidet` | Vidéos/images/DB locale |
-| `CLAIDET_MAX_KEY_FRAMES` | `6` | Nombre d'images clés extraites |
+| `REELICIOUS_CLAUDE_MODEL` | `claude-sonnet-5` | Modèle utilisé |
+| `REELICIOUS_WHISPER_SIZE` | `small` | Taille du modèle faster-whisper |
+| `REELICIOUS_WHISPER_DEVICE` | `cpu` | `cpu` ou `cuda` |
+| `REELICIOUS_DATA_DIR` | `~/.reelicious` | Vidéos/images/DB locale |
+| `REELICIOUS_MAX_KEY_FRAMES` | `6` | Nombre d'images clés extraites |
 
 ## Tests
 
