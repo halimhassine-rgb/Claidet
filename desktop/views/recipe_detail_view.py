@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -48,6 +49,7 @@ class RecipeDetailView(QWidget):
         header.addWidget(edit_button)
         header.addWidget(delete_button)
 
+        self._current_recipe: Recipe | None = None
         self._hero_label = QLabel()
         self._hero_label.setFixedHeight(_HERO_SIZE.height())
         self._hero_label.setAlignment(Qt.AlignCenter)
@@ -129,19 +131,30 @@ class RecipeDetailView(QWidget):
 
         content_row = QHBoxLayout()
         content_row.addStretch(1)
-        content_row.addWidget(content_wrap)
+        content_row.addWidget(content_wrap, 1)
         content_row.addStretch(1)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 24, 32, 32)
-        layout.setSpacing(20)
-        layout.addLayout(header)
-        layout.addLayout(content_row, 1)
+        scroll_body = QWidget()
+        scroll_layout = QVBoxLayout(scroll_body)
+        scroll_layout.setContentsMargins(32, 24, 32, 32)
+        scroll_layout.setSpacing(20)
+        scroll_layout.addLayout(header)
+        scroll_layout.addLayout(content_row)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(scroll_body)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
 
     def load_recipe(self, recipe: Recipe) -> None:
         self._recipe_id = recipe.id
+        self._current_recipe = recipe
         self._title_label.setText(recipe.title)
-        self._hero_label.setPixmap(_hero_pixmap(recipe))
+        self._refresh_hero()
 
         if recipe.category:
             bg, fg = theme.category_colors(recipe.category)
@@ -191,15 +204,30 @@ class RecipeDetailView(QWidget):
     def _open_source(self, url: str) -> None:
         QDesktopServices.openUrl(url)
 
+    def resizeEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
+        super().resizeEvent(event)
+        self._refresh_hero()
 
-def _hero_pixmap(recipe: Recipe) -> QPixmap:
+    def _refresh_hero(self) -> None:
+        if self._current_recipe is None:
+            return
+        # Régénérée à la largeur réelle du label (et non une largeur fixe
+        # devinée à l'avance) : sur certains systèmes (résolutions
+        # d'écran/mise à l'échelle variées), une taille figée pouvait ne
+        # pas correspondre à l'espace réellement disponible.
+        width = max(self._hero_label.width(), 320)
+        size = QSize(width, _HERO_SIZE.height())
+        self._hero_label.setPixmap(_hero_pixmap(self._current_recipe, size))
+
+
+def _hero_pixmap(recipe: Recipe, size: QSize) -> QPixmap:
     if recipe.cover_image_path:
         path = Path(recipe.cover_image_path)
         if path.exists():
             pixmap = QPixmap(str(path))
             if not pixmap.isNull():
-                return theme.rounded_pixmap(pixmap, _HERO_SIZE, radius=20)
-    return theme.placeholder_cover(_HERO_SIZE, radius=20)
+                return theme.rounded_pixmap(pixmap, size, radius=20)
+    return theme.placeholder_cover(size, radius=20)
 
 
 def _ingredient_row(ingredient) -> QHBoxLayout:

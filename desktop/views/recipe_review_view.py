@@ -7,25 +7,35 @@ Cet écran unique sert trois usages, tous alimentés par la même méthode
      légende Instagram et les images clés affichés comme référence.
   3. Le mode de secours manuel pur, quand l'extraction n'a pas du tout
      été tentée ou a totalement échoué.
+
+Rien ici ne doit défiler « à l'intérieur » d'un champ : le tableau
+d'ingrédients et les zones de texte s'agrandissent avec leur contenu, et
+c'est la page entière (via la QScrollArea de premier niveau) qui défile
+si tout ne tient pas à l'écran.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QComboBox,
     QFileDialog,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
+    QHeaderView,
     QLabel,
     QLineEdit,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QTableWidget,
     QTableWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -41,12 +51,52 @@ from engine.models import (
 )
 
 _INGREDIENT_COLUMNS = ("Ingrédient", "Quantité", "Note")
+_THUMB_SIZE = 72
 
 
 def _field_label(text: str) -> QLabel:
     label = QLabel(text)
     label.setProperty("role", "section-label")
     return label
+
+
+class _AutoGrowPlainTextEdit(QPlainTextEdit):
+    """QPlainTextEdit qui s'agrandit avec son contenu au lieu de défiler."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        self.setMinimumHeight(72)
+        self.textChanged.connect(self._autosize)
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
+        super().resizeEvent(event)
+        self._autosize()
+
+    def _autosize(self) -> None:
+        doc_height = self.document().size().height()
+        frame = 2 * self.frameWidth()
+        margins = self.contentsMargins()
+        height = int(doc_height) + margins.top() + margins.bottom() + frame + 10
+        self.setFixedHeight(max(72, height))
+
+
+class _AutoHeightTableWidget(QTableWidget):
+    """QTableWidget qui s'agrandit pour montrer toutes ses lignes sans
+    barre de défilement interne."""
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
+        super().resizeEvent(event)
+        self.autosize()
+
+    def autosize(self) -> None:
+        self.resizeRowsToContents()
+        total = self.horizontalHeader().height() + 2 * self.frameWidth()
+        for row in range(self.rowCount()):
+            total += self.rowHeight(row)
+        self.setFixedHeight(max(total, self.horizontalHeader().height() + 40))
 
 
 class RecipeReviewView(QWidget):
@@ -89,9 +139,31 @@ class RecipeReviewView(QWidget):
         cover_col.addWidget(self._cover_label)
         cover_col.addWidget(cover_button)
 
-        self._ingredients_table = QTableWidget(0, len(_INGREDIENT_COLUMNS))
+        self._frame_group = QButtonGroup(self)
+        self._frame_group.setExclusive(True)
+        self._frame_row = QHBoxLayout()
+        self._frame_row.setSpacing(8)
+        frame_section_layout = QVBoxLayout()
+        frame_section_layout.setSpacing(8)
+        frame_section_layout.addWidget(
+            _field_label("Choisir l'image de couverture parmi les images extraites")
+        )
+        frame_section_layout.addLayout(self._frame_row)
+        self._frame_section = QWidget()
+        self._frame_section.setLayout(frame_section_layout)
+        self._frame_section.hide()
+
+        self._ingredients_table = _AutoHeightTableWidget(0, len(_INGREDIENT_COLUMNS))
         self._ingredients_table.setHorizontalHeaderLabels(_INGREDIENT_COLUMNS)
-        self._ingredients_table.horizontalHeader().setStretchLastSection(True)
+        self._ingredients_table.setWordWrap(True)
+        self._ingredients_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._ingredients_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        header = self._ingredients_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.setSectionResizeMode(1, QHeaderView.Interactive)
+        header.setStretchLastSection(True)
+        self._ingredients_table.setColumnWidth(0, 240)
+        self._ingredients_table.setColumnWidth(1, 120)
         add_ingredient_btn = QPushButton("+ Ingrédient")
         add_ingredient_btn.setProperty("variant", "secondary")
         add_ingredient_btn.clicked.connect(lambda: self._add_ingredient_row())
@@ -103,16 +175,16 @@ class RecipeReviewView(QWidget):
         ingredients_buttons.addWidget(remove_ingredient_btn)
         ingredients_buttons.addStretch(1)
 
-        self._steps_edit = QPlainTextEdit()
+        self._steps_edit = _AutoGrowPlainTextEdit()
         self._steps_edit.setPlaceholderText("Une étape par ligne, dans l'ordre.")
 
-        self._notes_edit = QPlainTextEdit()
+        self._notes_edit = _AutoGrowPlainTextEdit()
         self._notes_edit.setPlaceholderText("Notes libres (facultatif)")
 
         self._raw_group = QGroupBox("Données brutes extraites (référence)")
-        self._transcript_view = QPlainTextEdit()
+        self._transcript_view = _AutoGrowPlainTextEdit()
         self._transcript_view.setReadOnly(True)
-        self._caption_view = QPlainTextEdit()
+        self._caption_view = _AutoGrowPlainTextEdit()
         self._caption_view.setReadOnly(True)
         raw_layout = QVBoxLayout(self._raw_group)
         raw_layout.addWidget(QLabel("Transcription audio :"))
@@ -145,20 +217,31 @@ class RecipeReviewView(QWidget):
         top_row.addLayout(form_col, 3)
         top_row.addLayout(cover_col, 1)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(32, 24, 32, 28)
-        layout.setSpacing(16)
-        layout.addWidget(self._error_label)
-        layout.addLayout(top_row)
-        layout.addWidget(_field_label("Ingrédients"))
-        layout.addWidget(self._ingredients_table)
-        layout.addLayout(ingredients_buttons)
-        layout.addWidget(_field_label("Étapes"))
-        layout.addWidget(self._steps_edit)
-        layout.addWidget(_field_label("Notes"))
-        layout.addWidget(self._notes_edit)
-        layout.addWidget(self._raw_group)
-        layout.addLayout(buttons_row)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(32, 24, 32, 28)
+        content_layout.setSpacing(16)
+        content_layout.addWidget(self._error_label)
+        content_layout.addLayout(top_row)
+        content_layout.addWidget(self._frame_section)
+        content_layout.addWidget(_field_label("Ingrédients"))
+        content_layout.addWidget(self._ingredients_table)
+        content_layout.addLayout(ingredients_buttons)
+        content_layout.addWidget(_field_label("Étapes"))
+        content_layout.addWidget(self._steps_edit)
+        content_layout.addWidget(_field_label("Notes"))
+        content_layout.addWidget(self._notes_edit)
+        content_layout.addWidget(self._raw_group)
+        content_layout.addLayout(buttons_row)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setWidget(content)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
 
     # -- Catégories disponibles -----------------------------------------
 
@@ -174,6 +257,38 @@ class RecipeReviewView(QWidget):
         self._category_combo.setCurrentText(current)
         self._category_combo.blockSignals(False)
 
+    # -- Images clés extraites (choix de la couverture) ------------------
+
+    def set_frame_candidates(self, frame_paths: list[str]) -> None:
+        for button in list(self._frame_group.buttons()):
+            self._frame_group.removeButton(button)
+        while self._frame_row.count():
+            item = self._frame_row.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        valid_paths = [p for p in frame_paths if Path(p).exists()]
+        self._frame_section.setVisible(bool(valid_paths))
+
+        for path in valid_paths:
+            pixmap = QPixmap(path)
+            if pixmap.isNull():
+                continue
+            thumb = theme.rounded_pixmap(pixmap, QSize(_THUMB_SIZE, _THUMB_SIZE), radius=10)
+            button = QToolButton()
+            button.setProperty("variant", "thumb")
+            button.setCheckable(True)
+            button.setIcon(QIcon(thumb))
+            button.setIconSize(QSize(_THUMB_SIZE, _THUMB_SIZE))
+            button.setFixedSize(_THUMB_SIZE + 8, _THUMB_SIZE + 8)
+            button.setChecked(path == self._cover_image_path)
+            button.clicked.connect(lambda _checked=False, p=path: self._set_cover_image(p))
+            button._frame_path = path  # pour resynchroniser l'état coché ailleurs
+            self._frame_group.addButton(button)
+            self._frame_row.addWidget(button)
+        self._frame_row.addStretch(1)
+
     # -- Chargement -------------------------------------------------
 
     def load_blank(self, source_url: str | None = None) -> None:
@@ -186,6 +301,7 @@ class RecipeReviewView(QWidget):
     def load_from_result(self, result: ExtractionResult) -> None:
         self._load_recipe_fields(result.recipe)
         self._base_recipe = result.recipe
+        self.set_frame_candidates(result.frame_paths)
 
         if result.status is ExtractionStatus.SUCCESS:
             self._error_label.hide()
@@ -227,10 +343,12 @@ class RecipeReviewView(QWidget):
         self._category_combo.setCurrentText("")
         self._servings_edit.clear()
         self._ingredients_table.setRowCount(0)
+        self._ingredients_table.autosize()
         self._steps_edit.clear()
         self._notes_edit.clear()
         self._error_label.hide()
         self._raw_group.hide()
+        self.set_frame_candidates([])
 
     # -- Construction du résultat ------------------------------------
 
@@ -278,11 +396,13 @@ class RecipeReviewView(QWidget):
         self._ingredients_table.insertRow(row)
         for col, value in enumerate((name, quantity, note)):
             self._ingredients_table.setItem(row, col, QTableWidgetItem(value))
+        self._ingredients_table.autosize()
 
     def _remove_selected_ingredient_row(self) -> None:
         rows = {index.row() for index in self._ingredients_table.selectedIndexes()}
         for row in sorted(rows, reverse=True):
             self._ingredients_table.removeRow(row)
+        self._ingredients_table.autosize()
 
     def _cell_text(self, row: int, col: int) -> str:
         item = self._ingredients_table.item(row, col)
@@ -299,6 +419,9 @@ class RecipeReviewView(QWidget):
 
     def _set_cover_image(self, path: str | None) -> None:
         self._cover_image_path = path
+        for button in self._frame_group.buttons():
+            button.setChecked(getattr(button, "_frame_path", None) == path)
+
         if path and Path(path).exists():
             pixmap = QPixmap(path).scaled(
                 160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation

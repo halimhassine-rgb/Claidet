@@ -141,6 +141,16 @@ def build_stylesheet() -> str:
         border-color: {INK};
     }}
 
+    QToolButton[variant="thumb"] {{
+        background: {SURFACE};
+        border: 2px solid transparent;
+        border-radius: 12px;
+        padding: 2px;
+    }}
+    QToolButton[variant="thumb"]:checked {{
+        border-color: {ACCENT};
+    }}
+
     QLineEdit, QPlainTextEdit, QComboBox, QTableWidget {{
         background: {SURFACE};
         border: 1px solid {LINE};
