@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import sys
 
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication
 
+from desktop import theme
 from desktop.main_window import MainWindow
 from engine.config import EngineConfig
 from storage.repository import RecipeRepository
@@ -17,6 +19,8 @@ def main() -> int:
     repository = RecipeRepository(config.db_path, covers_dir=config.covers_dir)
 
     app = QApplication(sys.argv)
+    app.setStyleSheet(theme.build_stylesheet())
+    app.setFont(QFont("Segoe UI", 10))
     window = MainWindow(config, repository)
     window.show()
     return app.exec()

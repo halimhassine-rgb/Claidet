@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from desktop import theme
 from engine.models import (
     ExtractionResult,
     ExtractionStatus,
@@ -40,6 +41,12 @@ from engine.models import (
 )
 
 _INGREDIENT_COLUMNS = ("Ingrédient", "Quantité", "Note")
+
+
+def _field_label(text: str) -> QLabel:
+    label = QLabel(text)
+    label.setProperty("role", "section-label")
+    return label
 
 
 class RecipeReviewView(QWidget):
@@ -53,7 +60,10 @@ class RecipeReviewView(QWidget):
 
         self._error_label = QLabel()
         self._error_label.setWordWrap(True)
-        self._error_label.setStyleSheet("color: #b00020; font-weight: bold;")
+        self._error_label.setStyleSheet(
+            f"color: {theme.DANGER_TEXT}; background: {theme.DANGER_TINT}; "
+            "font-weight: 600; border-radius: 10px; padding: 12px 14px;"
+        )
         self._error_label.hide()
 
         self._title_edit = QLineEdit()
@@ -68,8 +78,12 @@ class RecipeReviewView(QWidget):
         self._cover_label = QLabel("Pas d'image")
         self._cover_label.setFixedSize(160, 160)
         self._cover_label.setAlignment(Qt.AlignCenter)
-        self._cover_label.setStyleSheet("border: 1px solid #999;")
+        self._cover_label.setStyleSheet(
+            f"border: 1px solid {theme.LINE}; border-radius: 14px; "
+            f"background: {theme.SURFACE}; color: {theme.INK_FAINT};"
+        )
         cover_button = QPushButton("Choisir une image…")
+        cover_button.setProperty("variant", "secondary")
         cover_button.clicked.connect(self._choose_cover_image)
         cover_col = QVBoxLayout()
         cover_col.addWidget(self._cover_label)
@@ -79,8 +93,10 @@ class RecipeReviewView(QWidget):
         self._ingredients_table.setHorizontalHeaderLabels(_INGREDIENT_COLUMNS)
         self._ingredients_table.horizontalHeader().setStretchLastSection(True)
         add_ingredient_btn = QPushButton("+ Ingrédient")
+        add_ingredient_btn.setProperty("variant", "secondary")
         add_ingredient_btn.clicked.connect(lambda: self._add_ingredient_row())
         remove_ingredient_btn = QPushButton("Supprimer la ligne")
+        remove_ingredient_btn.setProperty("variant", "ghost")
         remove_ingredient_btn.clicked.connect(self._remove_selected_ingredient_row)
         ingredients_buttons = QHBoxLayout()
         ingredients_buttons.addWidget(add_ingredient_btn)
@@ -106,8 +122,10 @@ class RecipeReviewView(QWidget):
         self._raw_group.hide()
 
         save_button = QPushButton("Enregistrer")
+        save_button.setProperty("variant", "primary")
         save_button.clicked.connect(self._on_save_clicked)
         cancel_button = QPushButton("Annuler")
+        cancel_button.setProperty("variant", "ghost")
         cancel_button.clicked.connect(self.cancel_requested.emit)
         buttons_row = QHBoxLayout()
         buttons_row.addStretch(1)
@@ -115,25 +133,29 @@ class RecipeReviewView(QWidget):
         buttons_row.addWidget(save_button)
 
         top_row = QHBoxLayout()
+        top_row.setSpacing(24)
         form_col = QVBoxLayout()
-        form_col.addWidget(QLabel("Titre"))
+        form_col.setSpacing(8)
+        form_col.addWidget(_field_label("Titre"))
         form_col.addWidget(self._title_edit)
-        form_col.addWidget(QLabel("Catégorie"))
+        form_col.addWidget(_field_label("Catégorie"))
         form_col.addWidget(self._category_combo)
-        form_col.addWidget(QLabel("Portions"))
+        form_col.addWidget(_field_label("Portions"))
         form_col.addWidget(self._servings_edit)
         top_row.addLayout(form_col, 3)
         top_row.addLayout(cover_col, 1)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(32, 24, 32, 28)
+        layout.setSpacing(16)
         layout.addWidget(self._error_label)
         layout.addLayout(top_row)
-        layout.addWidget(QLabel("Ingrédients"))
+        layout.addWidget(_field_label("Ingrédients"))
         layout.addWidget(self._ingredients_table)
         layout.addLayout(ingredients_buttons)
-        layout.addWidget(QLabel("Étapes"))
+        layout.addWidget(_field_label("Étapes"))
         layout.addWidget(self._steps_edit)
-        layout.addWidget(QLabel("Notes"))
+        layout.addWidget(_field_label("Notes"))
         layout.addWidget(self._notes_edit)
         layout.addWidget(self._raw_group)
         layout.addLayout(buttons_row)
