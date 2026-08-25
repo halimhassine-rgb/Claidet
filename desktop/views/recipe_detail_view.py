@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop import theme
+from desktop.widgets import HeartToggle, StarRating
 from engine.models import Recipe
 
 _HERO_SIZE = QSize(920, 280)
@@ -26,6 +27,7 @@ _STEP_BADGE = 34
 class RecipeDetailView(QWidget):
     edit_requested = Signal(str)  # recipe id
     delete_requested = Signal(str)  # recipe id
+    favorite_toggled = Signal(str, bool)  # recipe id, is_favorite
     back_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -35,6 +37,9 @@ class RecipeDetailView(QWidget):
         back_button = QPushButton("←  Mes recettes")
         back_button.setProperty("variant", "ghost")
         back_button.clicked.connect(self.back_requested.emit)
+
+        self._heart_button = HeartToggle(overlay=False)
+        self._heart_button.toggled.connect(self._on_favorite_toggled)
 
         edit_button = QPushButton("Modifier")
         edit_button.setProperty("variant", "secondary")
@@ -46,6 +51,7 @@ class RecipeDetailView(QWidget):
         header = QHBoxLayout()
         header.addWidget(back_button)
         header.addStretch(1)
+        header.addWidget(self._heart_button)
         header.addWidget(edit_button)
         header.addWidget(delete_button)
 
@@ -69,6 +75,8 @@ class RecipeDetailView(QWidget):
         self._source_link.setOpenExternalLinks(False)
         self._source_link.linkActivated.connect(self._open_source)
 
+        self._rating_widget = StarRating(editable=False)
+
         meta_row = QHBoxLayout()
         meta_row.setSpacing(12)
         meta_row.addWidget(self._category_pill)
@@ -80,6 +88,7 @@ class RecipeDetailView(QWidget):
         title_block.addWidget(self._source_link)
         title_block.addWidget(self._title_label)
         title_block.addLayout(meta_row)
+        title_block.addWidget(self._rating_widget)
 
         ingredients_label = QLabel("Ingrédients")
         ingredients_label.setProperty("role", "section-label")
@@ -173,6 +182,11 @@ class RecipeDetailView(QWidget):
         self._servings_label.setText(recipe.servings or "")
         self._servings_label.setVisible(bool(recipe.servings))
 
+        self._rating_widget.set_rating(recipe.rating)
+        self._heart_button.blockSignals(True)
+        self._heart_button.setChecked(recipe.is_favorite)
+        self._heart_button.blockSignals(False)
+
         if recipe.source_url:
             self._source_link.setText(
                 f'<a href="{recipe.source_url}" style="color:{theme.ACCENT};'
@@ -206,6 +220,10 @@ class RecipeDetailView(QWidget):
 
     def _open_source(self, url: str) -> None:
         QDesktopServices.openUrl(url)
+
+    def _on_favorite_toggled(self, checked: bool) -> None:
+        if self._recipe_id is not None:
+            self.favorite_toggled.emit(self._recipe_id, checked)
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
         super().resizeEvent(event)

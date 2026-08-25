@@ -86,6 +86,13 @@ class Recipe(BaseModel):
     # client mobile en JSON.
     cover_image_path: str | None = None
     extraction_method: Literal["auto", "manual"] = "manual"
+    # Note sur 10, mise à la main ; None tant qu'elle n'a pas été notée.
+    rating: int | None = Field(default=None, ge=0, le=10)
+    is_favorite: bool = False
+    # Position dans la liste "ordre personnalisé" (glisser-déposer sur
+    # l'accueil) ; attribuée par le stockage à la création, jamais par
+    # l'utilisateur directement.
+    sort_order: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

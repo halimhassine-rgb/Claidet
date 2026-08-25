@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import QMimeData, QPoint, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QButtonGroup,
+    QComboBox,
     QFrame,
     QGraphicsDropShadowEffect,
     QGridLayout,
@@ -22,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop import theme
+from desktop.widgets import HeartToggle
 from engine.models import Recipe
 
 _ALL_CATEGORIES = "Toutes les catégories"
@@ -29,18 +32,32 @@ _NO_CATEGORY = "Sans catégorie"
 _CARD_WIDTH = 240
 _COVER_HEIGHT = 132
 _GRID_SPACING = 20
+_RECIPE_MIME = "application/x-reelicious-recipe-id"
+_CATEGORY_MIME = "application/x-reelicious-category"
+
+_SORT_MODES = (
+    ("manual", "Ordre personnalisé"),
+    ("rating_desc", "Note décroissante"),
+    ("rating_asc", "Note croissante"),
+)
 
 
 class _RecipeCard(QFrame):
     clicked = Signal(str)  # recipe id
+    favorite_toggled = Signal(str, bool)  # recipe id, is_favorite
+    reorder_requested = Signal(str, str)  # dragged recipe id, target recipe id
 
-    def __init__(self, recipe: Recipe, parent: QWidget | None = None) -> None:
+    def __init__(self, recipe: Recipe, draggable: bool, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._recipe_id = recipe.id
+        self._draggable = draggable
+        self._drag_start: QPoint | None = None
+        self._dragging = False
         self.setProperty("role", "card")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedWidth(_CARD_WIDTH)
         self.setCursor(Qt.PointingHandCursor)
+        self.setAcceptDrops(True)
 
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(20)
@@ -48,9 +65,16 @@ class _RecipeCard(QFrame):
         shadow.setColor(QColor(35, 44, 30, 45))
         self.setGraphicsEffect(shadow)
 
-        cover_label = QLabel()
+        cover_label = QLabel(self)
         cover_label.setFixedSize(_CARD_WIDTH, _COVER_HEIGHT)
         cover_label.setPixmap(_cover_pixmap(recipe, QSize(_CARD_WIDTH, _COVER_HEIGHT)))
+
+        self._heart = HeartToggle(overlay=True, parent=cover_label)
+        self._heart.setChecked(recipe.is_favorite)
+        self._heart.move(_CARD_WIDTH - self._heart.width() - 8, 8)
+        self._heart.toggled.connect(
+            lambda checked: self.favorite_toggled.emit(self._recipe_id, checked)
+        )
 
         title_label = QLabel(recipe.title)
         title_label.setProperty("role", "title")
@@ -76,6 +100,10 @@ class _RecipeCard(QFrame):
         body.setContentsMargins(16, 14, 16, 16)
         body.setSpacing(9)
         body.addWidget(title_label)
+        if recipe.rating:
+            rating_label = QLabel(f"★ {recipe.rating}/10")
+            rating_label.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px; font-weight: 700;")
+            body.addWidget(rating_label)
         body.addLayout(meta_row)
 
         outer = QVBoxLayout(self)
@@ -84,10 +112,94 @@ class _RecipeCard(QFrame):
         outer.addWidget(cover_label)
         outer.addLayout(body)
 
+    # -- Clic vs. glisser-déposer -----------------------------------------
+
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
-            self.clicked.emit(self._recipe_id)
+            self._drag_start = event.position().toPoint()
+            self._dragging = False
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if (
+            self._draggable
+            and self._drag_start is not None
+            and event.buttons() & Qt.LeftButton
+            and (event.position().toPoint() - self._drag_start).manhattanLength()
+            >= QApplication.startDragDistance()
+        ):
+            self._dragging = True
+            self._start_drag()
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton and not self._dragging and self._drag_start is not None:
+            self.clicked.emit(self._recipe_id)
+        self._drag_start = None
+        self._dragging = False
+        super().mouseReleaseEvent(event)
+
+    def _start_drag(self) -> None:
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setData(_RECIPE_MIME, self._recipe_id.encode("utf-8"))
+        drag.setMimeData(mime)
+        drag.setPixmap(self.grab().scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        drag.setHotSpot(QPoint(20, 20))
+        drag.exec(Qt.MoveAction)
+
+    def dragEnterEvent(self, event) -> None:
+        if self._draggable and event.mimeData().hasFormat(_RECIPE_MIME):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        source_id = bytes(event.mimeData().data(_RECIPE_MIME)).decode("utf-8")
+        if source_id and source_id != self._recipe_id:
+            self.reorder_requested.emit(source_id, self._recipe_id)
+        event.acceptProposedAction()
+
+
+class _DraggableCategoryButton(QPushButton):
+    """Pastille de catégorie, glissable pour changer l'ordre d'affichage."""
+
+    reorder_requested = Signal(str, str)  # catégorie déplacée, catégorie cible
+
+    def __init__(self, label: str, parent: QWidget | None = None) -> None:
+        super().__init__(label, parent)
+        self._drag_start: QPoint | None = None
+        self.setAcceptDrops(True)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._drag_start = event.position().toPoint()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if (
+            self._drag_start is not None
+            and event.buttons() & Qt.LeftButton
+            and (event.position().toPoint() - self._drag_start).manhattanLength()
+            >= QApplication.startDragDistance()
+        ):
+            drag = QDrag(self)
+            mime = QMimeData()
+            mime.setData(_CATEGORY_MIME, self.text().encode("utf-8"))
+            drag.setMimeData(mime)
+            drag.setPixmap(self.grab())
+            drag.exec(Qt.MoveAction)
+            self._drag_start = None
+            return
+        super().mouseMoveEvent(event)
+
+    def dragEnterEvent(self, event) -> None:
+        if event.mimeData().hasFormat(_CATEGORY_MIME):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:
+        source = bytes(event.mimeData().data(_CATEGORY_MIME)).decode("utf-8")
+        if source and source != self.text():
+            self.reorder_requested.emit(source, self.text())
+        event.acceptProposedAction()
 
 
 class RecipeListView(QWidget):
@@ -95,11 +207,17 @@ class RecipeListView(QWidget):
     new_recipe_requested = Signal()
     export_requested = Signal()
     import_requested = Signal()
+    favorite_toggle_requested = Signal(str, bool)  # recipe id, is_favorite
+    reorder_requested = Signal(list)  # ids de recette dans le nouvel ordre
+    category_order_changed = Signal(list)
+    sort_mode_changed = Signal(str)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._recipes: list[Recipe] = []
         self._columns = 3
+        self._category_order: list[str] = []
+        self._sort_mode = "manual"
 
         mark = QLabel()
         mark.setFixedSize(34, 34)
@@ -138,10 +256,23 @@ class RecipeListView(QWidget):
         header.addWidget(more_button)
         header.addWidget(new_button)
 
+        sort_label = QLabel("Trier par :")
+        sort_label.setProperty("role", "muted")
+        self._sort_combo = QComboBox()
+        for _key, label in _SORT_MODES:
+            self._sort_combo.addItem(label)
+        self._sort_combo.currentIndexChanged.connect(self._on_sort_mode_selected)
+
         self._filter_group = QButtonGroup(self)
         self._filter_group.setExclusive(True)
         self._filter_row = QHBoxLayout()
         self._filter_row.setSpacing(8)
+
+        filters_row = QHBoxLayout()
+        filters_row.setSpacing(16)
+        filters_row.addLayout(self._filter_row, 1)
+        filters_row.addWidget(sort_label)
+        filters_row.addWidget(self._sort_combo)
 
         self._grid_container = QWidget()
         self._grid = QGridLayout(self._grid_container)
@@ -159,7 +290,7 @@ class RecipeListView(QWidget):
         layout.setContentsMargins(32, 28, 32, 24)
         layout.setSpacing(22)
         layout.addLayout(header)
-        layout.addLayout(self._filter_row)
+        layout.addLayout(filters_row)
         layout.addWidget(scroll, 1)
 
     def _build_empty_state(self) -> QWidget:
@@ -190,6 +321,23 @@ class RecipeListView(QWidget):
         layout.addWidget(button, 0, Qt.AlignCenter)
         return container
 
+    # -- Préférences (appelées par MainWindow avant set_recipes) ---------
+
+    def set_category_order(self, order: list[str]) -> None:
+        self._category_order = list(order)
+
+    def set_sort_mode(self, mode: str) -> None:
+        self._sort_mode = mode if mode in dict(_SORT_MODES) else "manual"
+        index = [key for key, _label in _SORT_MODES].index(self._sort_mode)
+        self._sort_combo.blockSignals(True)
+        self._sort_combo.setCurrentIndex(index)
+        self._sort_combo.blockSignals(False)
+
+    def _on_sort_mode_selected(self, index: int) -> None:
+        self._sort_mode = _SORT_MODES[index][0]
+        self.sort_mode_changed.emit(self._sort_mode)
+        self._render()
+
     # -- Données -----------------------------------------------------
 
     def set_recipes(self, recipes: list[Recipe]) -> None:
@@ -208,28 +356,64 @@ class RecipeListView(QWidget):
             if widget is not None:
                 widget.deleteLater()
 
-        categories = sorted({r.category for r in self._recipes if r.category})
+        used = sorted({r.category for r in self._recipes if r.category})
+        known = [c for c in self._category_order if c in used]
+        new_ones = [c for c in used if c not in self._category_order]
+        self._category_order = known + new_ones
         has_uncategorized = any(not r.category for r in self._recipes)
-        labels = [_ALL_CATEGORIES, *categories]
-        if has_uncategorized:
-            labels.append(_NO_CATEGORY)
 
-        for label in labels:
-            button = QPushButton(label)
+        all_button = QPushButton(_ALL_CATEGORIES)
+        all_button.setProperty("variant", "pill")
+        all_button.setCheckable(True)
+        all_button.setChecked(previous == _ALL_CATEGORIES)
+        all_button.clicked.connect(self._render)
+        self._filter_group.addButton(all_button)
+        self._filter_row.addWidget(all_button)
+
+        for category in self._category_order:
+            button = _DraggableCategoryButton(category)
             button.setProperty("variant", "pill")
             button.setCheckable(True)
-            button.setChecked(label == previous)
+            button.setChecked(category == previous)
             button.clicked.connect(self._render)
+            button.reorder_requested.connect(self._on_category_reordered)
             self._filter_group.addButton(button)
             self._filter_row.addWidget(button)
+
+        if has_uncategorized:
+            none_button = QPushButton(_NO_CATEGORY)
+            none_button.setProperty("variant", "pill")
+            none_button.setCheckable(True)
+            none_button.setChecked(previous == _NO_CATEGORY)
+            none_button.clicked.connect(self._render)
+            self._filter_group.addButton(none_button)
+            self._filter_row.addWidget(none_button)
+
         self._filter_row.addStretch(1)
 
         if self._filter_group.checkedButton() is None and self._filter_group.buttons():
             self._filter_group.buttons()[0].setChecked(True)
 
+    def _on_category_reordered(self, dragged: str, target: str) -> None:
+        if dragged not in self._category_order or target not in self._category_order:
+            return
+        order = [c for c in self._category_order if c != dragged]
+        order.insert(order.index(target), dragged)
+        self._category_order = order
+        self.category_order_changed.emit(list(order))
+        self._refresh_category_filter()
+        self._render()
+
     def _active_category(self) -> str:
         checked = self._filter_group.checkedButton()
         return checked.text() if checked else _ALL_CATEGORIES
+
+    def _sorted_recipes(self) -> list[Recipe]:
+        if self._sort_mode == "rating_desc":
+            return sorted(self._recipes, key=lambda r: (r.rating is None, -(r.rating or 0)))
+        if self._sort_mode == "rating_asc":
+            return sorted(self._recipes, key=lambda r: (r.rating is None, r.rating or 0))
+        return self._recipes  # "manual" : déjà dans l'ordre personnalisé (sort_order)
 
     def _render(self) -> None:
         while self._grid.count():
@@ -238,13 +422,14 @@ class RecipeListView(QWidget):
             if widget is not None:
                 widget.setParent(None)
 
+        ordered = self._sorted_recipes()
         selected = self._active_category()
         if selected == _ALL_CATEGORIES:
-            visible = self._recipes
+            visible = ordered
         elif selected == _NO_CATEGORY:
-            visible = [r for r in self._recipes if not r.category]
+            visible = [r for r in ordered if not r.category]
         else:
-            visible = [r for r in self._recipes if r.category == selected]
+            visible = [r for r in ordered if r.category == selected]
 
         if not visible:
             self._grid.addWidget(self._empty_widget, 0, 0, 1, max(self._columns, 1))
@@ -252,11 +437,32 @@ class RecipeListView(QWidget):
             return
 
         self._empty_widget.hide()
+        draggable = self._sort_mode == "manual"
         for index, recipe in enumerate(visible):
-            card = _RecipeCard(recipe)
+            card = _RecipeCard(recipe, draggable=draggable)
             card.clicked.connect(self.recipe_selected.emit)
+            card.favorite_toggled.connect(self._on_card_favorite_toggled)
+            card.reorder_requested.connect(self._on_cards_reordered)
             row, col = divmod(index, self._columns)
             self._grid.addWidget(card, row, col)
+
+    def _on_card_favorite_toggled(self, recipe_id: str, is_favorite: bool) -> None:
+        self._recipes = [
+            r.model_copy(update={"is_favorite": is_favorite}) if r.id == recipe_id else r
+            for r in self._recipes
+        ]
+        self.favorite_toggle_requested.emit(recipe_id, is_favorite)
+
+    def _on_cards_reordered(self, dragged_id: str, target_id: str) -> None:
+        ids = [r.id for r in self._recipes]
+        if dragged_id not in ids or target_id not in ids:
+            return
+        ids.remove(dragged_id)
+        ids.insert(ids.index(target_id), dragged_id)
+        by_id = {r.id: r for r in self._recipes}
+        self._recipes = [by_id[i] for i in ids]
+        self.reorder_requested.emit(ids)
+        self._render()
 
     # -- Mise en page responsive -----------------------------------------
 

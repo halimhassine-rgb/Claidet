@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop import theme
+from desktop.widgets import StarRating
 from engine.models import (
     ExtractionResult,
     ExtractionStatus,
@@ -214,6 +215,9 @@ class RecipeReviewView(QWidget):
         form_col.addWidget(self._category_combo)
         form_col.addWidget(_field_label("Portions"))
         form_col.addWidget(self._servings_edit)
+        form_col.addWidget(_field_label("Note"))
+        self._rating_widget = StarRating(editable=True)
+        form_col.addWidget(self._rating_widget)
         top_row.addLayout(form_col, 3)
         top_row.addLayout(cover_col, 1)
 
@@ -333,6 +337,7 @@ class RecipeReviewView(QWidget):
             "\n".join(step.text for step in sorted(recipe.steps, key=lambda s: s.order))
         )
         self._notes_edit.setPlainText(recipe.notes or "")
+        self._rating_widget.set_rating(recipe.rating)
         self._set_cover_image(recipe.cover_image_path)
 
     def _reset_fields(self) -> None:
@@ -342,6 +347,7 @@ class RecipeReviewView(QWidget):
         self._title_edit.clear()
         self._category_combo.setCurrentText("")
         self._servings_edit.clear()
+        self._rating_widget.set_rating(0)
         self._ingredients_table.setRowCount(0)
         self._ingredients_table.autosize()
         self._steps_edit.clear()
@@ -380,6 +386,7 @@ class RecipeReviewView(QWidget):
             ingredients=ingredients,
             steps=steps,
             notes=self._notes_edit.toPlainText().strip() or None,
+            rating=self._rating_widget.rating(),
             cover_image_path=self._cover_image_path,
         )
         if base is not None:

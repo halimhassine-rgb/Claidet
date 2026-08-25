@@ -17,14 +17,27 @@ CREATE TABLE IF NOT EXISTS recipes (
     notes TEXT,
     cover_image_path TEXT,
     extraction_method TEXT NOT NULL,
+    rating INTEGER,
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
 # Colonnes ajoutées après la version initiale du schéma : appliquées aux
 # bases déjà existantes sans effacer les recettes qui y sont déjà.
-_MIGRATIONS = ("ALTER TABLE recipes ADD COLUMN category TEXT",)
+_MIGRATIONS = (
+    "ALTER TABLE recipes ADD COLUMN category TEXT",
+    "ALTER TABLE recipes ADD COLUMN rating INTEGER",
+    "ALTER TABLE recipes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+)
 
 
 def connect(db_path: Path) -> sqlite3.Connection:

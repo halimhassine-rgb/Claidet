@@ -66,14 +66,63 @@ def test_save_preserves_created_at_on_update(tmp_path):
     assert second.updated_at >= first.updated_at
 
 
-def test_list_all_orders_by_updated_at_desc(tmp_path):
+def test_list_all_orders_by_manual_sort_order_by_default(tmp_path):
     repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
-    repo.save(_make_recipe(title="Ancienne"))
-    repo.save(_make_recipe(title="Récente"))
+    repo.save(_make_recipe(title="Première"))
+    repo.save(_make_recipe(title="Seconde"))
 
     recipes = repo.list_all()
 
-    assert [r.title for r in recipes] == ["Récente", "Ancienne"]
+    # Nouvelles recettes ajoutées à la fin de l'ordre personnalisé.
+    assert [r.title for r in recipes] == ["Première", "Seconde"]
+
+
+def test_reorder_recipes_updates_sort_order(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    first = repo.save(_make_recipe(title="Première"))
+    second = repo.save(_make_recipe(title="Seconde"))
+    third = repo.save(_make_recipe(title="Troisième"))
+
+    repo.reorder_recipes([third.id, first.id, second.id])
+
+    assert [r.title for r in repo.list_all()] == ["Troisième", "Première", "Seconde"]
+
+
+def test_set_favorite_toggles_flag(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    saved = repo.save(_make_recipe())
+    assert saved.is_favorite is False
+
+    repo.set_favorite(saved.id, True)
+    assert repo.get(saved.id).is_favorite is True
+
+    repo.set_favorite(saved.id, False)
+    assert repo.get(saved.id).is_favorite is False
+
+
+def test_rating_roundtrip(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    saved = repo.save(_make_recipe(rating=8))
+
+    assert repo.get(saved.id).rating == 8
+
+
+def test_category_order_roundtrip(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    assert repo.get_category_order() == []
+
+    repo.set_category_order(["Dessert", "Entrée", "Plat"])
+
+    assert repo.get_category_order() == ["Dessert", "Entrée", "Plat"]
+
+
+def test_sort_mode_defaults_to_manual_and_roundtrips(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    assert repo.get_sort_mode() == "manual"
+
+    repo.set_sort_mode("rating_desc")
+
+    assert repo.get_sort_mode() == "rating_desc"
 
 
 def test_list_categories_returns_distinct_used_categories(tmp_path):

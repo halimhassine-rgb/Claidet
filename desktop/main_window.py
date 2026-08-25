@@ -50,6 +50,10 @@ class MainWindow(QMainWindow):
         self._list_view.recipe_selected.connect(self._show_detail_view)
         self._list_view.export_requested.connect(self._export_recipes)
         self._list_view.import_requested.connect(self._import_recipes)
+        self._list_view.favorite_toggle_requested.connect(self._repository.set_favorite)
+        self._list_view.reorder_requested.connect(self._repository.reorder_recipes)
+        self._list_view.category_order_changed.connect(self._repository.set_category_order)
+        self._list_view.sort_mode_changed.connect(self._repository.set_sort_mode)
 
         self._url_view.extract_requested.connect(self._start_extraction)
         self._url_view.manual_requested.connect(self._start_manual_entry)
@@ -59,6 +63,7 @@ class MainWindow(QMainWindow):
 
         self._detail_view.edit_requested.connect(self._edit_recipe)
         self._detail_view.delete_requested.connect(self._delete_recipe)
+        self._detail_view.favorite_toggled.connect(self._repository.set_favorite)
         self._detail_view.back_requested.connect(self._show_list_view)
 
         self._show_list_view()
@@ -66,6 +71,8 @@ class MainWindow(QMainWindow):
     # -- Navigation -------------------------------------------------
 
     def _show_list_view(self) -> None:
+        self._list_view.set_category_order(self._repository.get_category_order())
+        self._list_view.set_sort_mode(self._repository.get_sort_mode())
         self._list_view.set_recipes(self._repository.list_all())
         self._stack.setCurrentWidget(self._list_view)
 
