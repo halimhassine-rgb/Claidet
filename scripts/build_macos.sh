@@ -28,6 +28,9 @@ cp assets/icon.png "$ICONSET/icon_512x512@2x.png"
 iconutil -c icns "$ICONSET" -o assets/icon.icns
 rm -rf "$ICONSET"
 
+echo "Nettoyage des anciennes constructions (évite de garder un .app périmé)..."
+rm -rf build dist
+
 echo "Empaquetage avec PyInstaller (ça prend quelques minutes)..."
 pyinstaller --name Reelicious --windowed --noconfirm \
   --icon assets/icon.icns \
