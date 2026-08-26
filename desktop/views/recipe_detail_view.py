@@ -21,6 +21,7 @@ from desktop.widgets import HeartToggle, StarRating
 from engine.models import Recipe
 
 _HERO_SIZE = QSize(920, 280)
+_BODY_MAX_WIDTH = 1200
 _STEP_BADGE = 34
 
 
@@ -131,27 +132,41 @@ class RecipeDetailView(QWidget):
         notes_layout.addWidget(notes_label)
         notes_layout.addWidget(self._notes_text)
 
-        content = QVBoxLayout()
-        content.setSpacing(28)
-        content.addWidget(self._hero_label)
-        content.addLayout(title_block)
-        content.addLayout(body_row)
-        content.addWidget(self._notes_frame)
-        content_wrap = QWidget()
-        content_wrap.setLayout(content)
-        content_wrap.setMaximumWidth(_HERO_SIZE.width())
+        # La photo (et le bloc titre juste dessous) garde une largeur de
+        # lecture confortable ; les ingrédients/étapes n'ont pas besoin de
+        # s'y aligner et profitent d'un cadre plus large, centré sous la
+        # photo, pour donner aux étapes autant de place qu'aux ingrédients.
+        hero_and_title = QVBoxLayout()
+        hero_and_title.setSpacing(28)
+        hero_and_title.addWidget(self._hero_label)
+        hero_and_title.addLayout(title_block)
+        self._hero_wrap = QWidget()
+        self._hero_wrap.setLayout(hero_and_title)
 
-        content_row = QHBoxLayout()
-        content_row.addStretch(1)
-        content_row.addWidget(content_wrap, 1)
-        content_row.addStretch(1)
+        hero_row = QHBoxLayout()
+        hero_row.addStretch(1)
+        hero_row.addWidget(self._hero_wrap)
+        hero_row.addStretch(1)
+
+        body_content = QVBoxLayout()
+        body_content.setSpacing(28)
+        body_content.addLayout(body_row)
+        body_content.addWidget(self._notes_frame)
+        self._body_wrap = QWidget()
+        self._body_wrap.setLayout(body_content)
+
+        body_row_centered = QHBoxLayout()
+        body_row_centered.addStretch(1)
+        body_row_centered.addWidget(self._body_wrap)
+        body_row_centered.addStretch(1)
 
         scroll_body = QWidget()
         scroll_layout = QVBoxLayout(scroll_body)
         scroll_layout.setContentsMargins(32, 24, 32, 32)
-        scroll_layout.setSpacing(20)
+        scroll_layout.setSpacing(28)
         scroll_layout.addLayout(header)
-        scroll_layout.addLayout(content_row)
+        scroll_layout.addLayout(hero_row)
+        scroll_layout.addLayout(body_row_centered)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -166,7 +181,7 @@ class RecipeDetailView(QWidget):
         self._recipe_id = recipe.id
         self._current_recipe = recipe
         self._title_label.setText(recipe.title)
-        self._refresh_hero()
+        self._update_widths()
 
         if recipe.category:
             bg, fg = theme.category_colors(recipe.category)
@@ -227,6 +242,17 @@ class RecipeDetailView(QWidget):
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
         super().resizeEvent(event)
+        self._update_widths()
+
+    def _update_widths(self) -> None:
+        # Le mécanisme habituel de Qt (stretch de part et d'autre d'un
+        # widget capé par une largeur maximale) ne se déclenche pas de
+        # façon fiable à l'intérieur d'une QScrollArea ici : on calcule
+        # donc explicitement la largeur de chaque bloc à chaque
+        # redimensionnement plutôt que de compter sur les stretch factors.
+        available = max(self.width() - 80, 320)
+        self._hero_wrap.setFixedWidth(min(available, _HERO_SIZE.width()))
+        self._body_wrap.setFixedWidth(min(available, _BODY_MAX_WIDTH))
         self._refresh_hero()
 
     def _refresh_hero(self) -> None:
