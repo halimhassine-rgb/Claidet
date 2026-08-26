@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from desktop import theme
@@ -191,35 +191,85 @@ def _draw_heart(painter: QPainter, rect: QRectF, filled: bool, color: QColor) ->
     painter.drawPath(heart)
 
 
-def _star_path(rect: QRectF, points: int = 5) -> QPainterPath:
+def _star_points(rect: QRectF, points: int = 5) -> list[QPointF]:
     cx, cy = rect.center().x(), rect.center().y()
     outer_radius = min(rect.width(), rect.height()) / 2
     inner_radius = outer_radius * 0.42
 
-    path = QPainterPath()
+    result = []
     angle = -math.pi / 2
     step = math.pi / points
     for i in range(points * 2):
         radius = outer_radius if i % 2 == 0 else inner_radius
-        point = QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle))
-        if i == 0:
-            path.moveTo(point)
-        else:
-            path.lineTo(point)
+        result.append(QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
         angle += step
+    return result
+
+
+def _rounded_polygon_path(points: list[QPointF], radius: float) -> QPainterPath:
+    """Relie `points` par des segments dont chaque coin est arrondi (un
+    petit arc via `quadTo`) plutôt qu'un angle vif — donne la silhouette
+    « étoile aux pointes rondes » plutôt qu'un polygone en pointe."""
+
+    path = QPainterPath()
+    count = len(points)
+    for i in range(count):
+        previous, current, following = points[(i - 1) % count], points[i], points[(i + 1) % count]
+
+        to_previous = previous - current
+        to_following = following - current
+        len_previous = math.hypot(to_previous.x(), to_previous.y())
+        len_following = math.hypot(to_following.x(), to_following.y())
+        r1 = min(radius, len_previous * 0.45)
+        r2 = min(radius, len_following * 0.45)
+
+        start = current + to_previous * (r1 / len_previous)
+        end = current + to_following * (r2 / len_following)
+
+        if i == 0:
+            path.moveTo(start)
+        else:
+            path.lineTo(start)
+        path.quadTo(current, end)
+    path.closeSubpath()
+    return path
+
+
+def _star_path(rect: QRectF, rounded: bool = False) -> QPainterPath:
+    points = _star_points(rect)
+    if rounded:
+        outer_radius = min(rect.width(), rect.height()) / 2
+        return _rounded_polygon_path(points, outer_radius * 0.3)
+
+    path = QPainterPath()
+    for i, point in enumerate(points):
+        path.moveTo(point) if i == 0 else path.lineTo(point)
     path.closeSubpath()
     return path
 
 
 def _draw_star(painter: QPainter, rect: QRectF, filled: bool, color: QColor) -> None:
-    path = _star_path(rect)
+    """Étoile dorée « glossy » (dégradé + contour orange) une fois notée ;
+    simple contour aux pointes rondes sinon."""
+
     if filled:
-        painter.setPen(Qt.NoPen)
-        painter.setBrush(color)
+        path = _star_path(rect, rounded=True)
+        gradient = QRadialGradient(
+            rect.left() + rect.width() * 0.42,
+            rect.top() + rect.height() * 0.38,
+            rect.width() * 0.75,
+        )
+        gradient.setColorAt(0.0, QColor("#FFFDE7"))
+        gradient.setColorAt(0.5, QColor("#FFD23F"))
+        gradient.setColorAt(1.0, QColor("#F2A71B"))
+        painter.setBrush(QBrush(gradient))
+        painter.setPen(QPen(QColor("#E8890F"), max(1.1, rect.width() * 0.07)))
+        painter.drawPath(path)
     else:
-        painter.setPen(QPen(color, max(1.2, rect.width() * 0.09)))
+        path = _star_path(rect, rounded=True)
         painter.setBrush(Qt.NoBrush)
-    painter.drawPath(path)
+        painter.setPen(QPen(color, max(1.2, rect.width() * 0.09)))
+        painter.drawPath(path)
 
 
 def heart_icon(color: str, size: int = 14, filled: bool = False) -> QIcon:
