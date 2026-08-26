@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -16,7 +17,7 @@ from PySide6.QtWidgets import (
 
 
 class UrlInputView(QWidget):
-    extract_requested = Signal(str)
+    extract_requested = Signal(str, bool)  # url, use_ai
     manual_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -30,6 +31,14 @@ class UrlInputView(QWidget):
         self._extract_button.setProperty("variant", "primary")
         self._manual_button = QPushButton("Saisir une recette manuellement")
         self._manual_button.setProperty("variant", "secondary")
+
+        self._use_ai_checkbox = QCheckBox("Utiliser Claude (IA) pour cette extraction")
+        ai_hint = QLabel(
+            "Décochée : extraction gratuite par règles simples, à vérifier — "
+            "vous pourrez relancer avec Claude ensuite si besoin."
+        )
+        ai_hint.setProperty("role", "faint")
+        ai_hint.setWordWrap(True)
 
         self._status_label = QLabel("")
         self._status_label.setProperty("role", "muted")
@@ -53,11 +62,17 @@ class UrlInputView(QWidget):
         url_row.addWidget(self._url_edit, 1)
         url_row.addWidget(self._extract_button)
 
+        ai_option = QVBoxLayout()
+        ai_option.setSpacing(2)
+        ai_option.addWidget(self._use_ai_checkbox)
+        ai_option.addWidget(ai_hint)
+
         form = QVBoxLayout()
         form.setSpacing(18)
         form.addWidget(title)
         form.addWidget(subtitle)
         form.addLayout(url_row)
+        form.addLayout(ai_option)
         form.addWidget(self._progress_bar)
         form.addWidget(self._status_label)
         form.addWidget(self._manual_button, 0, Qt.AlignLeft)
@@ -79,15 +94,25 @@ class UrlInputView(QWidget):
     def _on_extract_clicked(self) -> None:
         url = self._url_edit.text().strip()
         if url:
-            self.extract_requested.emit(url)
+            self.extract_requested.emit(url, self._use_ai_checkbox.isChecked())
 
     def set_busy(self, busy: bool, status_text: str = "") -> None:
         self._extract_button.setEnabled(not busy)
         self._manual_button.setEnabled(not busy)
         self._url_edit.setEnabled(not busy)
+        self._use_ai_checkbox.setEnabled(not busy)
         self._progress_bar.setVisible(busy)
         self._status_label.setText(status_text)
 
+    def start_for_retry(self, url: str) -> None:
+        """Pré-remplit le lien et relance directement avec Claude — utilisé
+        quand on revient depuis l'écran de relecture après une extraction
+        sans IA jugée insuffisante."""
+        self._url_edit.setText(url)
+        self._use_ai_checkbox.setChecked(True)
+        self.extract_requested.emit(url, True)
+
     def reset(self) -> None:
         self._url_edit.clear()
+        self._use_ai_checkbox.setChecked(False)
         self.set_busy(False)

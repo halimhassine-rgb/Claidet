@@ -3,7 +3,11 @@ import json
 import pytest
 
 from engine.exceptions import RecipeReconstructionError
-from engine.recipe_builder import ClaudeRecipeReconstructor, _extract_json
+from engine.recipe_builder import (
+    ClaudeRecipeReconstructor,
+    HeuristicRecipeReconstructor,
+    _extract_json,
+)
 
 
 class _FakeTextBlock:
@@ -104,3 +108,46 @@ def test_extract_json_strips_surrounding_text():
 def test_extract_json_raises_without_braces():
     with pytest.raises(RecipeReconstructionError):
         _extract_json("pas de json ici")
+
+
+def test_heuristic_reconstruct_parses_structured_caption():
+    caption = (
+        "Pâtes au pesto maison\n"
+        "Ingrédients :\n"
+        "- 200 g de pâtes\n"
+        "- 2 cuillères à soupe de pesto\n"
+        "- 1 gousse d'ail\n"
+        "#recette #pates"
+    )
+    transcript = "On fait cuire les pâtes. Ensuite on ajoute le pesto. On mélange bien."
+
+    reconstructor = HeuristicRecipeReconstructor()
+    recipe = reconstructor.reconstruct(
+        transcript=transcript,
+        caption=caption,
+        frame_paths=[],
+        source_url="https://instagram.com/reel/abc",
+    )
+
+    assert recipe.title == "Pâtes au pesto maison"
+    assert recipe.source_url == "https://instagram.com/reel/abc"
+    assert recipe.extraction_method == "auto"
+    names = [i.name for i in recipe.ingredients]
+    assert "pâtes" in names
+    assert any(i.quantity and "200" in i.quantity for i in recipe.ingredients)
+    assert [s.text for s in recipe.steps] == [
+        "On fait cuire les pâtes.",
+        "Ensuite on ajoute le pesto.",
+        "On mélange bien.",
+    ]
+
+
+def test_heuristic_reconstruct_never_raises_on_empty_input():
+    reconstructor = HeuristicRecipeReconstructor()
+    recipe = reconstructor.reconstruct(
+        transcript=None, caption=None, frame_paths=[], source_url=None
+    )
+
+    assert recipe.title == "Recette sans titre"
+    assert recipe.ingredients == []
+    assert recipe.steps == []

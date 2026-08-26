@@ -117,6 +117,11 @@ class ExtractionResult(BaseModel):
     frame_paths: list[str] = Field(default_factory=list)
     failed_stage: PipelineStage | None = None
     error_message: str | None = None
+    # Reconstruction via Claude (True) ou par règles locales sans IA
+    # (False) — piloté par l'utilisateur au moment de l'extraction, pour
+    # savoir si l'écran de relecture doit proposer de relancer avec
+    # Claude.
+    used_ai: bool = True
 
     @property
     def needs_manual_review(self) -> bool:

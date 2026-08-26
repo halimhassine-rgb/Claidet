@@ -46,6 +46,7 @@ from engine.models import (
     ExtractionResult,
     ExtractionStatus,
     Ingredient,
+    PipelineStage,
     Recipe,
     Step,
     SUGGESTED_CATEGORIES,
@@ -103,6 +104,7 @@ class _AutoHeightTableWidget(QTableWidget):
 class RecipeReviewView(QWidget):
     save_requested = Signal(object)  # Recipe
     cancel_requested = Signal()
+    retry_with_ai_requested = Signal(str)  # source_url
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -116,6 +118,24 @@ class RecipeReviewView(QWidget):
             "font-weight: 600; border-radius: 10px; padding: 12px 14px;"
         )
         self._error_label.hide()
+
+        # Affiché quand la recette vient de l'extraction sans IA (gratuite) :
+        # propose de relancer avec Claude si le résultat ne convient pas.
+        self._ai_info_label = QLabel()
+        self._ai_info_label.setWordWrap(True)
+        self._ai_info_label.setStyleSheet(
+            f"color: {theme.ACCENT_DEEP}; background: {theme.ACCENT_TINT}; "
+            "font-weight: 600; border-radius: 10px; padding: 12px 14px;"
+        )
+        self._retry_ai_button = QPushButton("Réessayer avec Claude (IA)")
+        self._retry_ai_button.setProperty("variant", "secondary")
+        self._retry_ai_button.clicked.connect(self._on_retry_with_ai_clicked)
+        self._ai_info_row = QHBoxLayout()
+        self._ai_info_row.setSpacing(12)
+        self._ai_info_row.addWidget(self._ai_info_label, 1)
+        self._ai_info_row.addWidget(self._retry_ai_button, 0, Qt.AlignVCenter)
+        self._ai_info_label.hide()
+        self._retry_ai_button.hide()
 
         self._title_edit = QLineEdit()
         self._category_combo = QComboBox()
@@ -226,6 +246,7 @@ class RecipeReviewView(QWidget):
         content_layout.setContentsMargins(32, 24, 32, 28)
         content_layout.setSpacing(16)
         content_layout.addWidget(self._error_label)
+        content_layout.addLayout(self._ai_info_row)
         content_layout.addLayout(top_row)
         content_layout.addWidget(self._frame_section)
         content_layout.addWidget(_field_label("Ingrédients"))
@@ -315,6 +336,21 @@ class RecipeReviewView(QWidget):
             self._error_label.setText(f"⚠ {message}{hint}")
             self._error_label.show()
 
+        # Le lien n'a même pas pu être téléchargé : relancer avec Claude
+        # échouerait pour la même raison, inutile de le proposer.
+        can_retry = not result.used_ai and result.failed_stage is not PipelineStage.DOWNLOAD
+        if can_retry:
+            self._ai_info_label.setText(
+                "Extraction sans IA (gratuite) : vérifiez les champs ci-dessous et "
+                "corrigez-les à la main, ou relancez l'extraction avec Claude pour "
+                "un résultat plus précis (utilise des jetons IA payants)."
+            )
+            self._ai_info_label.show()
+            self._retry_ai_button.show()
+        else:
+            self._ai_info_label.hide()
+            self._retry_ai_button.hide()
+
         has_raw_data = bool(result.transcript or result.caption)
         self._transcript_view.setPlainText(result.transcript or "(aucune transcription)")
         self._caption_view.setPlainText(result.caption or "(aucune légende)")
@@ -324,6 +360,8 @@ class RecipeReviewView(QWidget):
         self._load_recipe_fields(recipe)
         self._base_recipe = recipe
         self._error_label.hide()
+        self._ai_info_label.hide()
+        self._retry_ai_button.hide()
         self._raw_group.hide()
 
     def _load_recipe_fields(self, recipe: Recipe) -> None:
@@ -353,6 +391,8 @@ class RecipeReviewView(QWidget):
         self._steps_edit.clear()
         self._notes_edit.clear()
         self._error_label.hide()
+        self._ai_info_label.hide()
+        self._retry_ai_button.hide()
         self._raw_group.hide()
         self.set_frame_candidates([])
 
@@ -395,6 +435,10 @@ class RecipeReviewView(QWidget):
 
     def _on_save_clicked(self) -> None:
         self.save_requested.emit(self.build_recipe())
+
+    def _on_retry_with_ai_clicked(self) -> None:
+        if self._base_recipe is not None and self._base_recipe.source_url:
+            self.retry_with_ai_requested.emit(self._base_recipe.source_url)
 
     # -- Ingrédients ---------------------------------------------------
 

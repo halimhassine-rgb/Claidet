@@ -60,6 +60,7 @@ class MainWindow(QMainWindow):
 
         self._review_view.save_requested.connect(self._save_recipe)
         self._review_view.cancel_requested.connect(self._show_list_view)
+        self._review_view.retry_with_ai_requested.connect(self._retry_with_ai)
 
         self._detail_view.edit_requested.connect(self._edit_recipe)
         self._detail_view.delete_requested.connect(self._delete_recipe)
@@ -91,17 +92,23 @@ class MainWindow(QMainWindow):
 
     # -- Extraction ---------------------------------------------------
 
-    def _start_extraction(self, url: str) -> None:
+    def _start_extraction(self, url: str, use_ai: bool = True) -> None:
         existing = self._repository.find_by_source_url(url)
         if existing is not None and not self._confirm_duplicate_extraction(existing):
             return
 
         self._url_view.set_busy(True, "Démarrage…")
-        self._worker = ExtractionWorker(self._pipeline, url)
+        self._worker = ExtractionWorker(self._pipeline, url, use_ai=use_ai)
         self._worker.stage_changed.connect(lambda text: self._url_view.set_busy(True, text))
         self._worker.succeeded.connect(self._on_extraction_succeeded)
         self._worker.crashed.connect(self._on_extraction_crashed)
         self._worker.start()
+
+    def _retry_with_ai(self, url: str) -> None:
+        """Depuis l'écran de relecture : le brouillon sans IA ne convient
+        pas, on relance la même extraction avec Claude."""
+        self._stack.setCurrentWidget(self._url_view)
+        self._url_view.start_for_retry(url)
 
     def _confirm_duplicate_extraction(self, existing: Recipe) -> bool:
         """Ce lien a déjà été importé : on prévient plutôt que de dupliquer

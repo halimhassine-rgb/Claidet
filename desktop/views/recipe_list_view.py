@@ -218,6 +218,7 @@ class RecipeListView(QWidget):
         self._columns = 3
         self._category_order: list[str] = []
         self._sort_mode = "manual"
+        self._favorites_only = False
 
         mark = QLabel()
         mark.setFixedSize(34, 34)
@@ -263,6 +264,11 @@ class RecipeListView(QWidget):
             self._sort_combo.addItem(label)
         self._sort_combo.currentIndexChanged.connect(self._on_sort_mode_selected)
 
+        self._favorites_button = QPushButton("♥ Favoris")
+        self._favorites_button.setProperty("variant", "pill")
+        self._favorites_button.setCheckable(True)
+        self._favorites_button.toggled.connect(self._on_favorites_filter_toggled)
+
         self._filter_group = QButtonGroup(self)
         self._filter_group.setExclusive(True)
         self._filter_row = QHBoxLayout()
@@ -271,6 +277,7 @@ class RecipeListView(QWidget):
         filters_row = QHBoxLayout()
         filters_row.setSpacing(16)
         filters_row.addLayout(self._filter_row, 1)
+        filters_row.addWidget(self._favorites_button)
         filters_row.addWidget(sort_label)
         filters_row.addWidget(self._sort_combo)
 
@@ -336,6 +343,10 @@ class RecipeListView(QWidget):
     def _on_sort_mode_selected(self, index: int) -> None:
         self._sort_mode = _SORT_MODES[index][0]
         self.sort_mode_changed.emit(self._sort_mode)
+        self._render()
+
+    def _on_favorites_filter_toggled(self, checked: bool) -> None:
+        self._favorites_only = checked
         self._render()
 
     # -- Données -----------------------------------------------------
@@ -430,6 +441,9 @@ class RecipeListView(QWidget):
             visible = [r for r in ordered if not r.category]
         else:
             visible = [r for r in ordered if r.category == selected]
+
+        if self._favorites_only:
+            visible = [r for r in visible if r.is_favorite]
 
         if not visible:
             self._grid.addWidget(self._empty_widget, 0, 0, 1, max(self._columns, 1))

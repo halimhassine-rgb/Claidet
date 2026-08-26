@@ -26,14 +26,17 @@ class ExtractionWorker(QThread):
     succeeded = Signal(ExtractionResult)
     crashed = Signal(str)
 
-    def __init__(self, pipeline: ExtractionPipeline, url: str) -> None:
+    def __init__(self, pipeline: ExtractionPipeline, url: str, use_ai: bool = True) -> None:
         super().__init__()
         self._pipeline = pipeline
         self._url = url
+        self._use_ai = use_ai
 
     def run(self) -> None:
         try:
-            result = self._pipeline.extract(self._url, on_progress=self._on_progress)
+            result = self._pipeline.extract(
+                self._url, on_progress=self._on_progress, use_ai=self._use_ai
+            )
         except Exception as exc:  # sécurité : le pipeline ne devrait normalement
             # jamais laisser fuir d'exception (voir engine.pipeline), mais on
             # ne veut surtout pas planter le thread UI si un cas nous échappe.

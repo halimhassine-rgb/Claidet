@@ -84,6 +84,43 @@ def test_pipeline_success_end_to_end(tiny_video, tmp_path):
     assert list(config.frames_dir.rglob("*.jpg"))
 
 
+def test_pipeline_uses_heuristic_reconstructor_when_use_ai_is_false(tiny_video, tmp_path):
+    config = EngineConfig(data_dir=tmp_path)
+
+    class _FakeHeuristic:
+        def reconstruct(self, **kwargs):
+            return Recipe(title="Recette sans IA", extraction_method="auto")
+
+    ai_reconstructor = _FakeReconstructor(error=RecipeReconstructionError("ne devrait pas être appelé"))
+    pipeline = ExtractionPipeline(
+        config,
+        downloader=_FakeDownloader(tiny_video),
+        transcriber=_FakeTranscriber(),
+        reconstructor=ai_reconstructor,
+        heuristic_reconstructor=_FakeHeuristic(),
+    )
+
+    result = pipeline.extract("https://instagram.com/reel/free", use_ai=False)
+
+    assert result.status is ExtractionStatus.SUCCESS
+    assert result.recipe.title == "Recette sans IA"
+    assert result.used_ai is False
+
+
+def test_pipeline_marks_used_ai_true_by_default(tiny_video, tmp_path):
+    config = EngineConfig(data_dir=tmp_path)
+    pipeline = ExtractionPipeline(
+        config,
+        downloader=_FakeDownloader(tiny_video),
+        transcriber=_FakeTranscriber(),
+        reconstructor=_FakeReconstructor(recipe=Recipe(title="Pâtes")),
+    )
+
+    result = pipeline.extract("https://instagram.com/reel/ai")
+
+    assert result.used_ai is True
+
+
 def test_pipeline_failed_when_download_fails(tmp_path):
     config = EngineConfig(data_dir=tmp_path)
     pipeline = ExtractionPipeline(

@@ -34,7 +34,11 @@ from engine.exceptions import (
 )
 from engine.frames import extract_key_frames, pick_cover_image
 from engine.models import ExtractionResult, ExtractionStatus, PipelineStage, Recipe
-from engine.recipe_builder import ClaudeRecipeReconstructor, RecipeReconstructor
+from engine.recipe_builder import (
+    ClaudeRecipeReconstructor,
+    HeuristicRecipeReconstructor,
+    RecipeReconstructor,
+)
 from engine.transcription import FasterWhisperTranscriber, Transcriber
 
 logger = logging.getLogger(__name__)
@@ -49,6 +53,7 @@ class ExtractionPipeline:
         downloader: VideoDownloader | None = None,
         transcriber: Transcriber | None = None,
         reconstructor: RecipeReconstructor | None = None,
+        heuristic_reconstructor: RecipeReconstructor | None = None,
     ) -> None:
         self._config = config
         self._downloader = downloader or YtDlpDownloader()
@@ -60,9 +65,10 @@ class ExtractionPipeline:
         self._reconstructor = reconstructor or ClaudeRecipeReconstructor(
             api_key=config.anthropic_api_key, model=config.claude_model
         )
+        self._heuristic_reconstructor = heuristic_reconstructor or HeuristicRecipeReconstructor()
 
     def extract(
-        self, url: str, on_progress: ProgressCallback | None = None
+        self, url: str, on_progress: ProgressCallback | None = None, use_ai: bool = True
     ) -> ExtractionResult:
         def report(stage: PipelineStage) -> None:
             if on_progress is not None:
@@ -82,7 +88,7 @@ class ExtractionPipeline:
             )
         except DownloadError as exc:
             logger.warning("Téléchargement échoué pour %s : %s", url, exc)
-            return _failed_result(url, PipelineStage.DOWNLOAD, str(exc))
+            return _failed_result(url, PipelineStage.DOWNLOAD, str(exc), used_ai=use_ai)
 
         transcript = self._try_transcribe(downloaded, report)
         frame_paths = self._try_extract_frames(downloaded, extraction_id, report)
@@ -96,6 +102,7 @@ class ExtractionPipeline:
             frame_paths=frame_paths,
             cover_image_path=cover_image_path,
             report=report,
+            use_ai=use_ai,
         )
 
     def _try_transcribe(
@@ -141,13 +148,15 @@ class ExtractionPipeline:
         frame_paths: list[Path],
         cover_image_path: Path | None,
         report: ProgressCallback,
+        use_ai: bool,
     ) -> ExtractionResult:
         has_raw_material = bool(transcript or downloaded.caption or frame_paths)
+        reconstructor = self._reconstructor if use_ai else self._heuristic_reconstructor
 
         report(PipelineStage.RECIPE_RECONSTRUCTION)
         if has_raw_material:
             try:
-                recipe = self._reconstructor.reconstruct(
+                recipe = reconstructor.reconstruct(
                     transcript=transcript,
                     caption=downloaded.caption,
                     frame_paths=frame_paths,
@@ -161,6 +170,7 @@ class ExtractionPipeline:
                     transcript=transcript,
                     caption=downloaded.caption,
                     frame_paths=[str(p) for p in frame_paths],
+                    used_ai=use_ai,
                 )
             except RecipeReconstructionError as exc:
                 logger.warning("Reconstruction de la recette échouée : %s", exc)
@@ -178,6 +188,7 @@ class ExtractionPipeline:
             frame_paths=[str(p) for p in frame_paths],
             failed_stage=PipelineStage.RECIPE_RECONSTRUCTION,
             error_message=error_message,
+            used_ai=use_ai,
         )
 
 
@@ -194,10 +205,13 @@ def _draft_recipe(
     )
 
 
-def _failed_result(url: str, stage: PipelineStage, error_message: str) -> ExtractionResult:
+def _failed_result(
+    url: str, stage: PipelineStage, error_message: str, used_ai: bool = True
+) -> ExtractionResult:
     return ExtractionResult(
         status=ExtractionStatus.FAILED,
         recipe=Recipe(source_url=url, title="Recette sans titre", extraction_method="manual"),
         failed_stage=stage,
         error_message=error_message,
+        used_ai=used_ai,
     )

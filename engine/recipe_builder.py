@@ -12,6 +12,7 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
+import re
 from pathlib import Path
 from typing import Protocol
 
@@ -169,3 +170,96 @@ def _payload_to_recipe(payload: dict, *, source_url: str | None) -> Recipe:
         notes=payload.get("notes"),
         extraction_method="auto",
     )
+
+
+# -- Reconstruction sans IA (gratuite, par règles) ---------------------
+#
+# Aucun appel réseau, aucun coût : on s'appuie sur le fait que beaucoup de
+# créateurs structurent déjà leur légende Instagram (liste à puces,
+# quantités visibles) et que la transcription audio suit à peu près
+# l'ordre des étapes. Le résultat est nécessairement moins fiable qu'une
+# reconstruction par Claude — c'est un brouillon à vérifier, pas un
+# substitut garanti.
+
+_BULLET_PREFIX = re.compile(r"^\s*(?:[-•*✅🔸▪️♦️]|\d+[.)])\s*")
+_QUANTITY_UNIT = (
+    r"(?:g|kg|mg|ml|cl|dl|l|c\.?à\.?s\.?|c\.?à\.?c\.?|cuillères?(?:\s*à\s*\w+)?|"
+    r"tasses?|pincées?|gousses?|tranches?|verres?|sachets?|unités?)"
+)
+_QUANTITY_LEAD = re.compile(
+    rf"^\s*(\d+(?:[.,/]\d+)?\s*(?:-\s*\d+(?:[.,/]\d+)?)?\s*{_QUANTITY_UNIT}?\.?)\s*(?:de |d')?\s*(.+)$",
+    re.IGNORECASE,
+)
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+class HeuristicRecipeReconstructor:
+    """Reconstruction par règles simples, sans appel à un LLM.
+
+    Alternative gratuite à `ClaudeRecipeReconstructor` : moins précise
+    (pas de lecture du texte incrusté dans les images, pas de vraie
+    compréhension du contenu), mais suffisante quand la légende du post
+    est déjà bien structurée. L'utilisateur choisit cette option pour
+    éviter le coût d'un appel IA, puis peut relancer avec Claude depuis
+    l'écran de relecture si le résultat ne lui convient pas.
+    """
+
+    def reconstruct(
+        self,
+        *,
+        transcript: str | None,
+        caption: str | None,
+        frame_paths: list[Path],
+        source_url: str | None,
+    ) -> Recipe:
+        caption_lines = [line.strip() for line in (caption or "").splitlines() if line.strip()]
+        ingredient_lines, other_caption_lines = _split_ingredient_lines(caption_lines)
+
+        return Recipe(
+            source_url=source_url,
+            title=_guess_title(caption_lines),
+            ingredients=_parse_ingredients(ingredient_lines),
+            steps=_guess_steps(transcript, other_caption_lines),
+            notes=caption,
+            extraction_method="auto",
+        )
+
+
+def _guess_title(caption_lines: list[str]) -> str:
+    if not caption_lines:
+        return "Recette sans titre"
+    # La légende commence en général par le nom du plat, avant la liste
+    # d'ingrédients ou les hashtags.
+    first = caption_lines[0].lstrip("#").strip()
+    return first[:120] if first else "Recette sans titre"
+
+
+def _split_ingredient_lines(lines: list[str]) -> tuple[list[str], list[str]]:
+    ingredient_lines, other_lines = [], []
+    for line in lines:
+        if line.startswith("#"):
+            continue
+        if _BULLET_PREFIX.match(line) or _QUANTITY_LEAD.match(line):
+            ingredient_lines.append(_BULLET_PREFIX.sub("", line).strip())
+        else:
+            other_lines.append(line)
+    return ingredient_lines, other_lines
+
+
+def _parse_ingredients(lines: list[str]) -> list[Ingredient]:
+    ingredients = []
+    for line in lines:
+        match = _QUANTITY_LEAD.match(line)
+        if match:
+            quantity, name = match.group(1).strip(), match.group(2).strip()
+        else:
+            quantity, name = None, line
+        if name:
+            ingredients.append(Ingredient(name=name, quantity=quantity))
+    return ingredients
+
+
+def _guess_steps(transcript: str | None, fallback_lines: list[str]) -> list[Step]:
+    source = transcript.strip() if transcript and transcript.strip() else "\n".join(fallback_lines)
+    sentences = [s.strip(" -–—") for s in _SENTENCE_SPLIT.split(source) if s.strip(" -–—")]
+    return [Step(order=index + 1, text=text) for index, text in enumerate(sentences)]
