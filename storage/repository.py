@@ -25,11 +25,19 @@ DEFAULT_SORT_MODE = "manual"
 
 
 class RecipeRepository:
-    def __init__(self, db_path: Path, covers_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        db_path: Path,
+        covers_dir: Path | None = None,
+        videos_dir: Path | None = None,
+    ) -> None:
         self._db_path = db_path
         self._covers_dir = covers_dir
+        self._videos_dir = videos_dir
         if covers_dir is not None:
             covers_dir.mkdir(parents=True, exist_ok=True)
+        if videos_dir is not None:
+            videos_dir.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection = connect(db_path)
 
     def close(self) -> None:
@@ -52,6 +60,7 @@ class RecipeRepository:
         persisted = recipe.model_copy(
             update={
                 "cover_image_path": self._persist_cover_image(recipe),
+                "video_path": self._persist_video(recipe),
                 "created_at": created_at,
                 "updated_at": datetime.now(timezone.utc),
                 "sort_order": sort_order,
@@ -62,9 +71,9 @@ class RecipeRepository:
             """
             INSERT INTO recipes (
                 id, source_url, title, category, servings, ingredients_json,
-                steps_json, notes, cover_image_path, extraction_method,
+                steps_json, notes, cover_image_path, video_path, extraction_method,
                 rating, is_favorite, sort_order, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 source_url=excluded.source_url,
                 title=excluded.title,
@@ -74,6 +83,7 @@ class RecipeRepository:
                 steps_json=excluded.steps_json,
                 notes=excluded.notes,
                 cover_image_path=excluded.cover_image_path,
+                video_path=excluded.video_path,
                 extraction_method=excluded.extraction_method,
                 rating=excluded.rating,
                 is_favorite=excluded.is_favorite,
@@ -90,6 +100,7 @@ class RecipeRepository:
                 json.dumps([s.model_dump() for s in persisted.steps]),
                 persisted.notes,
                 persisted.cover_image_path,
+                persisted.video_path,
                 persisted.extraction_method,
                 persisted.rating,
                 1 if persisted.is_favorite else 0,
@@ -124,6 +135,14 @@ class RecipeRepository:
         ).fetchall()
         return [row["category"] for row in rows]
 
+    def find_by_source_url(self, source_url: str) -> Recipe | None:
+        """Recherche une recette déjà enregistrée pour ce même lien source
+        (utilisé pour avertir avant de ré-extraire un reel déjà importé)."""
+        row = self._conn.execute(
+            "SELECT * FROM recipes WHERE source_url = ? LIMIT 1", (source_url,)
+        ).fetchone()
+        return _row_to_recipe(row) if row is not None else None
+
     def delete(self, recipe_id: str) -> None:
         recipe = self.get(recipe_id)
         self._conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
@@ -132,6 +151,10 @@ class RecipeRepository:
             cover = Path(recipe.cover_image_path)
             if self._covers_dir in cover.parents:
                 cover.unlink(missing_ok=True)
+        if recipe and recipe.video_path and self._videos_dir is not None:
+            video = Path(recipe.video_path)
+            if self._videos_dir in video.parents:
+                video.unlink(missing_ok=True)
 
     def set_favorite(self, recipe_id: str, is_favorite: bool) -> None:
         self._conn.execute(
@@ -201,6 +224,21 @@ class RecipeRepository:
         shutil.copyfile(source, dest)
         return str(dest)
 
+    def _persist_video(self, recipe: Recipe) -> str | None:
+        if not recipe.video_path or self._videos_dir is None:
+            return recipe.video_path
+
+        source = Path(recipe.video_path)
+        if self._videos_dir in source.parents:
+            return recipe.video_path  # déjà persistée
+
+        if not source.exists():
+            return None
+
+        dest = self._videos_dir / f"{recipe.id}{source.suffix}"
+        shutil.move(str(source), dest)
+        return str(dest)
+
 
 def _row_to_recipe(row: sqlite3.Row) -> Recipe:
     return Recipe(
@@ -213,6 +251,7 @@ def _row_to_recipe(row: sqlite3.Row) -> Recipe:
         steps=[Step(**d) for d in json.loads(row["steps_json"])],
         notes=row["notes"],
         cover_image_path=row["cover_image_path"],
+        video_path=row["video_path"],
         extraction_method=row["extraction_method"],
         rating=row["rating"],
         is_favorite=bool(row["is_favorite"]),

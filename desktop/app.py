@@ -17,7 +17,9 @@ from storage.repository import RecipeRepository
 def main() -> int:
     config = EngineConfig.from_env()
     config.ensure_dirs()
-    repository = RecipeRepository(config.db_path, covers_dir=config.covers_dir)
+    repository = RecipeRepository(
+        config.db_path, covers_dir=config.covers_dir, videos_dir=config.videos_dir
+    )
 
     app = QApplication(sys.argv)
     app.setStyleSheet(theme.build_stylesheet())

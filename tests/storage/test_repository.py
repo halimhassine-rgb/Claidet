@@ -135,6 +135,37 @@ def test_list_categories_returns_distinct_used_categories(tmp_path):
     assert repo.list_categories() == ["Dessert", "Entrée"]
 
 
+def test_save_moves_video_into_videos_dir(tmp_path):
+    source_video = tmp_path / "work" / "video.mp4"
+    source_video.parent.mkdir()
+    source_video.write_bytes(b"fake video bytes")
+
+    videos_dir = tmp_path / "videos"
+    repo = RecipeRepository(
+        tmp_path / "db.sqlite", covers_dir=tmp_path / "covers", videos_dir=videos_dir
+    )
+    recipe = _make_recipe(video_path=str(source_video))
+
+    saved = repo.save(recipe)
+
+    assert saved.video_path is not None
+    assert Path(saved.video_path).parent == videos_dir
+    assert Path(saved.video_path).read_bytes() == b"fake video bytes"
+    assert repo.get(saved.id).video_path == saved.video_path
+
+
+def test_find_by_source_url_returns_matching_recipe(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    saved = repo.save(_make_recipe(source_url="https://instagram.com/reel/abc"))
+    repo.save(_make_recipe(title="Autre", source_url="https://instagram.com/reel/def"))
+
+    found = repo.find_by_source_url("https://instagram.com/reel/abc")
+
+    assert found is not None
+    assert found.id == saved.id
+    assert repo.find_by_source_url("https://instagram.com/reel/inconnu") is None
+
+
 def test_delete_removes_recipe_and_cover_file(tmp_path):
     source_image = tmp_path / "cover_src.jpg"
     source_image.write_bytes(b"data")
@@ -148,3 +179,19 @@ def test_delete_removes_recipe_and_cover_file(tmp_path):
 
     assert repo.get(saved.id) is None
     assert not cover_path.exists()
+
+
+def test_delete_removes_video_file(tmp_path):
+    source_video = tmp_path / "video_src.mp4"
+    source_video.write_bytes(b"data")
+    videos_dir = tmp_path / "videos"
+    repo = RecipeRepository(
+        tmp_path / "db.sqlite", covers_dir=tmp_path / "covers", videos_dir=videos_dir
+    )
+    saved = repo.save(_make_recipe(video_path=str(source_video)))
+    video_path = Path(saved.video_path)
+    assert video_path.exists()
+
+    repo.delete(saved.id)
+
+    assert not video_path.exists()

@@ -17,6 +17,8 @@ pyinstaller --name Reelicious --windowed --noconfirm `
   --collect-all faster_whisper `
   --collect-all ctranslate2 `
   --collect-all yt_dlp `
+  --collect-all PySide6.QtMultimedia `
+  --collect-all PySide6.QtMultimediaWidgets `
   desktop\app.py
 
 Write-Host ""

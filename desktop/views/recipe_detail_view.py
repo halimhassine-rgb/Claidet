@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QStackedLayout,
     QVBoxLayout,
     QWidget,
 )
 
 from desktop import theme
+from desktop.video_player import VideoPlayer
 from desktop.widgets import HeartToggle, StarRating
 from engine.models import Recipe
 
@@ -60,6 +62,20 @@ class RecipeDetailView(QWidget):
         self._hero_label = QLabel()
         self._hero_label.setFixedHeight(_HERO_SIZE.height())
         self._hero_label.setAlignment(Qt.AlignCenter)
+
+        self._video_player = VideoPlayer()
+
+        # La photo statique et le lecteur vidéo occupent le même
+        # emplacement : on n'affiche le second que si la vidéo source de
+        # la recette a été conservée sur disque (recette extraite avant
+        # cette fonctionnalité => photo seule).
+        self._hero_stack = QStackedLayout()
+        self._hero_stack.setContentsMargins(0, 0, 0, 0)
+        self._hero_stack.addWidget(self._hero_label)
+        self._hero_stack.addWidget(self._video_player)
+        self._hero_container = QWidget()
+        self._hero_container.setLayout(self._hero_stack)
+        self._hero_container.setFixedHeight(_HERO_SIZE.height())
 
         self._title_label = QLabel()
         self._title_label.setProperty("role", "detail-title")
@@ -138,7 +154,7 @@ class RecipeDetailView(QWidget):
         # photo, pour donner aux étapes autant de place qu'aux ingrédients.
         hero_and_title = QVBoxLayout()
         hero_and_title.setSpacing(28)
-        hero_and_title.addWidget(self._hero_label)
+        hero_and_title.addWidget(self._hero_container)
         hero_and_title.addLayout(title_block)
         self._hero_wrap = QWidget()
         self._hero_wrap.setLayout(hero_and_title)
@@ -178,10 +194,18 @@ class RecipeDetailView(QWidget):
         outer.addWidget(scroll)
 
     def load_recipe(self, recipe: Recipe) -> None:
+        self._video_player.stop()
         self._recipe_id = recipe.id
         self._current_recipe = recipe
         self._title_label.setText(recipe.title)
         self._update_widths()
+
+        video_path = Path(recipe.video_path) if recipe.video_path else None
+        if video_path and video_path.exists():
+            self._video_player.load(str(video_path))
+            self._hero_stack.setCurrentWidget(self._video_player)
+        else:
+            self._hero_stack.setCurrentWidget(self._hero_label)
 
         if recipe.category:
             bg, fg = theme.category_colors(recipe.category)
@@ -232,6 +256,12 @@ class RecipeDetailView(QWidget):
             self._notes_frame.show()
         else:
             self._notes_frame.hide()
+
+    def stop_video(self) -> None:
+        """Coupe la lecture en quittant la fiche détail (navigation ou
+        passage en mode édition), pour ne pas laisser le son continuer en
+        arrière-plan."""
+        self._video_player.stop()
 
     def _open_source(self, url: str) -> None:
         QDesktopServices.openUrl(url)

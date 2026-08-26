@@ -21,6 +21,10 @@ les retrouver.
 6. **Image de couverture** : la miniature du post si disponible, sinon
    la première image clé extraite.
 
+La vidéo source est conservée (pas seulement l'image de couverture) pour
+pouvoir être rejouée depuis la fiche détail — voir la note sur l'espace
+disque dans la Configuration ci-dessous.
+
 Chaque étape peut échouer indépendamment sans faire échouer les autres :
 le pipeline dégrade gracieusement (voir plus bas).
 
@@ -114,9 +118,10 @@ compilation croisée.
 Depuis l'écran d'accueil, le menu **⋯** propose « Exporter mes
 recettes… » et « Importer des recettes… ». L'export produit une
 archive `.zip` autoportante (un manifeste JSON + les images de
-couverture) — pour migrer vers un autre ordinateur : exporter sur
-l'ancien poste, transférer le fichier (clé USB, cloud, email), puis
-importer sur le nouveau. Réimporter une archive déjà importée met à
+couverture et les vidéos sources) — pour migrer vers un autre
+ordinateur : exporter sur l'ancien poste, transférer le fichier (clé
+USB, cloud, email), puis importer sur le nouveau. L'archive peut être
+volumineuse (vidéos incluses). Réimporter une archive déjà importée met à
 jour les recettes existantes plutôt que de les dupliquer (`storage/backup.py`).
 
 ## Configuration
@@ -132,6 +137,12 @@ pour l'extraction automatique) :
 | `REELICIOUS_WHISPER_DEVICE` | `cpu` | `cpu` ou `cuda` |
 | `REELICIOUS_DATA_DIR` | `~/.reelicious` | Vidéos/images/DB locale |
 | `REELICIOUS_MAX_KEY_FRAMES` | `6` | Nombre d'images clés extraites |
+
+> **Espace disque** : chaque recette conserve sa vidéo source (dans
+> `REELICIOUS_DATA_DIR/videos`), en plus de son image de couverture, pour
+> permettre de la rejouer depuis la fiche détail. Cela représente
+> typiquement quelques dizaines de Mo par recette, contre quelques Ko
+> auparavant.
 
 ## Tests
 

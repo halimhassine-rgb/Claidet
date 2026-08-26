@@ -85,6 +85,10 @@ class Recipe(BaseModel):
     # binaires dans un modèle qui transite aussi tel quel vers un futur
     # client mobile en JSON.
     cover_image_path: str | None = None
+    # Vidéo source conservée (contrairement au fichier de travail du
+    # pipeline, supprimé une fois l'audio/les images extraits) pour
+    # pouvoir la rejouer depuis la fiche détail.
+    video_path: str | None = None
     extraction_method: Literal["auto", "manual"] = "manual"
     # Note sur 10, mise à la main ; None tant qu'elle n'a pas été notée.
     rating: int | None = Field(default=None, ge=0, le=10)

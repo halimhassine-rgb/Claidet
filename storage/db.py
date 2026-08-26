@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS recipes (
     steps_json TEXT NOT NULL,
     notes TEXT,
     cover_image_path TEXT,
+    video_path TEXT,
     extraction_method TEXT NOT NULL,
     rating INTEGER,
     is_favorite INTEGER NOT NULL DEFAULT 0,
@@ -37,6 +38,7 @@ _MIGRATIONS = (
     "ALTER TABLE recipes ADD COLUMN rating INTEGER",
     "ALTER TABLE recipes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE recipes ADD COLUMN video_path TEXT",
 )
 
 

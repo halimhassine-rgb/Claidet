@@ -62,9 +62,13 @@ class EngineConfig:
         return self.data_dir / "covers"
 
     @property
+    def videos_dir(self) -> Path:
+        return self.data_dir / "videos"
+
+    @property
     def db_path(self) -> Path:
         return self.data_dir / "reelicious.db"
 
     def ensure_dirs(self) -> None:
-        for d in (self.downloads_dir, self.frames_dir, self.covers_dir):
+        for d in (self.downloads_dir, self.frames_dir, self.covers_dir, self.videos_dir):
             d.mkdir(parents=True, exist_ok=True)

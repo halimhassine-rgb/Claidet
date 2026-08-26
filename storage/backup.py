@@ -19,6 +19,7 @@ from storage.repository import RecipeRepository
 
 _MANIFEST_NAME = "recipes.json"
 _COVERS_DIR_NAME = "covers"
+_VIDEOS_DIR_NAME = "videos"
 
 
 class BackupError(Exception):
@@ -35,11 +36,14 @@ def export_to_zip(repository: RecipeRepository, dest_path: Path) -> int:
         tmp_dir = Path(tmp)
         covers_dir = tmp_dir / _COVERS_DIR_NAME
         covers_dir.mkdir()
+        videos_dir = tmp_dir / _VIDEOS_DIR_NAME
+        videos_dir.mkdir()
 
         manifest = []
         for recipe in recipes:
             data = recipe.model_dump(mode="json")
             data["cover_image_path"] = _export_cover(recipe, covers_dir)
+            data["video_path"] = _export_video(recipe, videos_dir)
             manifest.append(data)
 
         manifest_path = tmp_dir / _MANIFEST_NAME
@@ -52,6 +56,8 @@ def export_to_zip(repository: RecipeRepository, dest_path: Path) -> int:
             archive.write(manifest_path, _MANIFEST_NAME)
             for cover_file in covers_dir.iterdir():
                 archive.write(cover_file, f"{_COVERS_DIR_NAME}/{cover_file.name}")
+            for video_file in videos_dir.iterdir():
+                archive.write(video_file, f"{_VIDEOS_DIR_NAME}/{video_file.name}")
 
     return len(recipes)
 
@@ -85,6 +91,10 @@ def import_from_zip(repository: RecipeRepository, source_path: Path) -> int:
             if cover_rel:
                 cover_path = tmp_dir / cover_rel
                 entry["cover_image_path"] = str(cover_path) if cover_path.exists() else None
+            video_rel = entry.get("video_path")
+            if video_rel:
+                video_path = tmp_dir / video_rel
+                entry["video_path"] = str(video_path) if video_path.exists() else None
             try:
                 recipe = Recipe(**entry)
             except (TypeError, ValueError) as exc:
@@ -105,3 +115,14 @@ def _export_cover(recipe: Recipe, covers_dir: Path) -> str | None:
     dest_name = f"{recipe.id}{source.suffix}"
     shutil.copyfile(source, covers_dir / dest_name)
     return f"{_COVERS_DIR_NAME}/{dest_name}"
+
+
+def _export_video(recipe: Recipe, videos_dir: Path) -> str | None:
+    if not recipe.video_path:
+        return None
+    source = Path(recipe.video_path)
+    if not source.exists():
+        return None
+    dest_name = f"{recipe.id}{source.suffix}"
+    shutil.copyfile(source, videos_dir / dest_name)
+    return f"{_VIDEOS_DIR_NAME}/{dest_name}"

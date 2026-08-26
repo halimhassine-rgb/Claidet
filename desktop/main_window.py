@@ -71,6 +71,7 @@ class MainWindow(QMainWindow):
     # -- Navigation -------------------------------------------------
 
     def _show_list_view(self) -> None:
+        self._detail_view.stop_video()
         self._list_view.set_category_order(self._repository.get_category_order())
         self._list_view.set_sort_mode(self._repository.get_sort_mode())
         self._list_view.set_recipes(self._repository.list_all())
@@ -91,12 +92,37 @@ class MainWindow(QMainWindow):
     # -- Extraction ---------------------------------------------------
 
     def _start_extraction(self, url: str) -> None:
+        existing = self._repository.find_by_source_url(url)
+        if existing is not None and not self._confirm_duplicate_extraction(existing):
+            return
+
         self._url_view.set_busy(True, "Démarrage…")
         self._worker = ExtractionWorker(self._pipeline, url)
         self._worker.stage_changed.connect(lambda text: self._url_view.set_busy(True, text))
         self._worker.succeeded.connect(self._on_extraction_succeeded)
         self._worker.crashed.connect(self._on_extraction_crashed)
         self._worker.start()
+
+    def _confirm_duplicate_extraction(self, existing: Recipe) -> bool:
+        """Ce lien a déjà été importé : on prévient plutôt que de dupliquer
+        silencieusement la recette. Renvoie True si l'utilisateur veut
+        quand même relancer l'extraction."""
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle("Recette déjà importée")
+        box.setText(f"Ce lien a déjà été importé sous le titre « {existing.title} ».")
+        box.setInformativeText("Que voulez-vous faire ?")
+        view_button = box.addButton("Voir la recette existante", QMessageBox.ActionRole)
+        extract_button = box.addButton("Extraire quand même", QMessageBox.AcceptRole)
+        box.addButton("Annuler", QMessageBox.RejectRole)
+        box.setDefaultButton(view_button)
+        box.exec()
+
+        clicked = box.clickedButton()
+        if clicked is view_button:
+            self._show_detail_view(existing.id)
+            return False
+        return clicked is extract_button
 
     def _on_extraction_succeeded(self, result: ExtractionResult) -> None:
         self._url_view.set_busy(False)
@@ -125,6 +151,7 @@ class MainWindow(QMainWindow):
         self._show_detail_view(saved.id)
 
     def _edit_recipe(self, recipe_id: str) -> None:
+        self._detail_view.stop_video()
         recipe = self._repository.get(recipe_id)
         if recipe is None:
             return

@@ -52,6 +52,35 @@ def test_export_then_import_roundtrip(tmp_path):
     assert Path(migrated.cover_image_path).read_bytes() == b"\xff\xd8\xff"
 
 
+def test_export_then_import_carries_video_file(tmp_path):
+    source_repo = RecipeRepository(
+        tmp_path / "source.sqlite",
+        covers_dir=tmp_path / "source_covers",
+        videos_dir=tmp_path / "source_videos",
+    )
+
+    video = tmp_path / "video.mp4"
+    video.write_bytes(b"fake video bytes")
+    saved = source_repo.save(_make_recipe(video_path=str(video)))
+
+    archive_path = tmp_path / "export.zip"
+    export_to_zip(source_repo, archive_path)
+
+    dest_repo = RecipeRepository(
+        tmp_path / "dest.sqlite",
+        covers_dir=tmp_path / "dest_covers",
+        videos_dir=tmp_path / "dest_videos",
+    )
+    import_from_zip(dest_repo, archive_path)
+
+    migrated = dest_repo.get(saved.id)
+    assert migrated is not None
+    assert migrated.video_path is not None
+    from pathlib import Path
+
+    assert Path(migrated.video_path).read_bytes() == b"fake video bytes"
+
+
 def test_export_skips_missing_cover_file(tmp_path):
     repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
     repo.save(_make_recipe(cover_image_path=str(tmp_path / "does_not_exist.jpg")))

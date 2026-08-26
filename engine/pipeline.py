@@ -84,13 +84,8 @@ class ExtractionPipeline:
             logger.warning("Téléchargement échoué pour %s : %s", url, exc)
             return _failed_result(url, PipelineStage.DOWNLOAD, str(exc))
 
-        try:
-            transcript = self._try_transcribe(downloaded, report)
-            frame_paths = self._try_extract_frames(downloaded, extraction_id, report)
-        finally:
-            # La vidéo brute ne sert plus à rien une fois l'audio et les
-            # images clés extraits ; elle est volumineuse, on la supprime.
-            downloaded.video_path.unlink(missing_ok=True)
+        transcript = self._try_transcribe(downloaded, report)
+        frame_paths = self._try_extract_frames(downloaded, extraction_id, report)
 
         cover_image_path = pick_cover_image(frame_paths, downloaded.thumbnail_path)
 
@@ -159,6 +154,7 @@ class ExtractionPipeline:
                     source_url=url,
                 )
                 recipe.cover_image_path = str(cover_image_path) if cover_image_path else None
+                recipe.video_path = str(downloaded.video_path)
                 return ExtractionResult(
                     status=ExtractionStatus.SUCCESS,
                     recipe=recipe,
@@ -193,6 +189,7 @@ def _draft_recipe(
         title=downloaded.title or "Recette sans titre",
         notes=downloaded.caption,
         cover_image_path=str(cover_image_path) if cover_image_path else None,
+        video_path=str(downloaded.video_path),
         extraction_method="manual",
     )
 

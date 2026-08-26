@@ -17,9 +17,9 @@ class _FakeDownloader:
     def download(self, url: str, dest_dir: Path) -> DownloadedVideo:
         dest_dir.mkdir(parents=True, exist_ok=True)
         video_path = dest_dir / "video.mp4"
-        # On copie la fixture plutôt que la référencer directement : le
-        # pipeline supprime le fichier vidéo une fois traité, il ne faut
-        # donc pas lui passer le fichier partagé entre tests.
+        # On copie la fixture plutôt que la référencer directement : chaque
+        # test doit avoir son propre fichier, indépendant de la fixture
+        # partagée.
         shutil.copyfile(self._source_video, video_path)
         return DownloadedVideo(
             video_path=video_path, title=self.title, caption=self.caption, thumbnail_path=None
@@ -75,10 +75,12 @@ def test_pipeline_success_end_to_end(tiny_video, tmp_path):
         PipelineStage.FRAME_EXTRACTION,
         PipelineStage.RECIPE_RECONSTRUCTION,
     ]
-    # La vidéo brute est supprimée après traitement (volumineuse, inutile
-    # une fois l'audio et les images clés extraits)...
-    assert not list(config.downloads_dir.rglob("*.mp4"))
-    # ...mais les images clés doivent survivre pour l'appelant.
+    # La vidéo brute est conservée (pour pouvoir la rejouer depuis la fiche
+    # détail) et référencée sur la recette.
+    assert list(config.downloads_dir.rglob("*.mp4"))
+    assert result.recipe.video_path is not None
+    assert Path(result.recipe.video_path).exists()
+    # ...et les images clés doivent aussi survivre pour l'appelant.
     assert list(config.frames_dir.rglob("*.jpg"))
 
 
