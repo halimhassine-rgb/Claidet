@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, QPoint, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QDrag, QFont, QFontMetrics, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -40,6 +40,38 @@ _SORT_MODES = (
     ("rating_desc", "Note décroissante"),
     ("rating_asc", "Note croissante"),
 )
+_TITLE_CONTENT_WIDTH = _CARD_WIDTH - 32  # marges gauche/droite du corps de la carte
+
+
+def _elide_title(text: str, max_lines: int = 2, width: int = _TITLE_CONTENT_WIDTH) -> str:
+    """Coupe le titre à `max_lines` lignes maximum, avec un « … » sur la
+    dernière plutôt que de laisser le texte déborder et se faire couper
+    net par la hauteur de la carte."""
+
+    metrics = QFontMetrics(QFont("Georgia", 17, QFont.Bold))
+    words = text.split()
+    lines: list[str] = []
+    index = 0
+    while index < len(words) and len(lines) < max_lines - 1:
+        current = words[index]
+        index += 1
+        while index < len(words):
+            candidate = f"{current} {words[index]}"
+            if metrics.horizontalAdvance(candidate) <= width:
+                current = candidate
+                index += 1
+            else:
+                break
+        lines.append(current)
+
+    remaining = " ".join(words[index:])
+    if remaining:
+        if metrics.horizontalAdvance(remaining) <= width:
+            lines.append(remaining)
+        else:
+            lines.append(metrics.elidedText(remaining, Qt.ElideRight, width))
+
+    return "\n".join(lines) if lines else text
 
 
 class _RecipeCard(QFrame):
@@ -76,9 +108,10 @@ class _RecipeCard(QFrame):
             lambda checked: self.favorite_toggled.emit(self._recipe_id, checked)
         )
 
-        title_label = QLabel(recipe.title)
+        title_label = QLabel(_elide_title(recipe.title))
         title_label.setProperty("role", "title")
-        title_label.setWordWrap(True)
+        title_label.setWordWrap(False)
+        title_label.setToolTip(recipe.title)
 
         meta_row = QHBoxLayout()
         meta_row.setSpacing(8)

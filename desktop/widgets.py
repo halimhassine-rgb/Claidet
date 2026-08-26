@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+import math
+
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
@@ -11,6 +13,30 @@ from desktop import theme
 _STAR_COUNT = 10
 _HEART_FILLED = "#D1483D"
 _HEART_EMPTY = "#FFFFFF"
+
+
+class _StarButton(QPushButton):
+    """Une étoile dessinée en vectoriel (voir `StarRating`) plutôt qu'un
+    caractère Unicode ★/☆, pour la même raison que `HeartToggle`."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._filled = False
+        self._color = theme.LINE
+        self.setFlat(True)
+        self.setStyleSheet("border: none; background: transparent;")
+
+    def set_filled(self, filled: bool, color: str) -> None:
+        self._filled = filled
+        self._color = color
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        margin = min(self.width(), self.height()) * 0.1
+        rect = QRectF(margin, margin, self.width() - 2 * margin, self.height() - 2 * margin)
+        _draw_star(painter, rect, self._filled, QColor(self._color))
 
 
 class StarRating(QWidget):
@@ -26,14 +52,13 @@ class StarRating(QWidget):
         super().__init__(parent)
         self._editable = editable
         self._rating = 0
-        self._buttons: list[QPushButton] = []
+        self._buttons: list[_StarButton] = []
 
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(1)
         for i in range(1, _STAR_COUNT + 1):
-            button = QPushButton("☆")
-            button.setFlat(True)
+            button = _StarButton()
             button.setEnabled(editable)
             button.setFixedSize(20, 22)
             if editable:
@@ -59,11 +84,7 @@ class StarRating(QWidget):
         self._rating = max(0, min(_STAR_COUNT, rating or 0))
         for index, button in enumerate(self._buttons, start=1):
             filled = index <= self._rating
-            button.setText("★" if filled else "☆")
-            color = theme.ACCENT if filled else theme.LINE
-            button.setStyleSheet(
-                f"border: none; background: transparent; font-size: 17px; color: {color};"
-            )
+            button.set_filled(filled, theme.ACCENT if filled else theme.LINE)
         self._label.setText(f"{self._rating}/10" if self._rating else "Pas encore noté")
 
     def rating(self) -> int | None:
@@ -168,6 +189,37 @@ def _draw_heart(painter: QPainter, rect: QRectF, filled: bool, color: QColor) ->
         painter.setPen(QPen(color, max(1.6, rect.width() * 0.1)))
         painter.setBrush(Qt.NoBrush)
     painter.drawPath(heart)
+
+
+def _star_path(rect: QRectF, points: int = 5) -> QPainterPath:
+    cx, cy = rect.center().x(), rect.center().y()
+    outer_radius = min(rect.width(), rect.height()) / 2
+    inner_radius = outer_radius * 0.42
+
+    path = QPainterPath()
+    angle = -math.pi / 2
+    step = math.pi / points
+    for i in range(points * 2):
+        radius = outer_radius if i % 2 == 0 else inner_radius
+        point = QPointF(cx + radius * math.cos(angle), cy + radius * math.sin(angle))
+        if i == 0:
+            path.moveTo(point)
+        else:
+            path.lineTo(point)
+        angle += step
+    path.closeSubpath()
+    return path
+
+
+def _draw_star(painter: QPainter, rect: QRectF, filled: bool, color: QColor) -> None:
+    path = _star_path(rect)
+    if filled:
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(color)
+    else:
+        painter.setPen(QPen(color, max(1.2, rect.width() * 0.09)))
+        painter.setBrush(Qt.NoBrush)
+    painter.drawPath(path)
 
 
 def heart_icon(color: str, size: int = 14, filled: bool = False) -> QIcon:
