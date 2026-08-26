@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from desktop import theme
@@ -70,7 +71,10 @@ class StarRating(QWidget):
 
 
 class HeartToggle(QPushButton):
-    """Bouton cœur (favori).
+    """Bouton cœur (favori), dessiné en vectoriel plutôt qu'avec un
+    caractère Unicode (♥/♡) : ce dernier ne s'affichait pas de façon
+    fiable selon la police du système (constaté sous Windows, où le
+    bouton apparaissait comme un simple rond vide, sans cœur visible).
 
     `overlay=True` (par défaut) : fond sombre semi-transparent, pensé
     pour être superposé sur une photo (cartes de l'accueil). `overlay=
@@ -81,6 +85,7 @@ class HeartToggle(QPushButton):
     def __init__(self, overlay: bool = True, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._overlay = overlay
+        self._color = _HEART_EMPTY
         self.setCheckable(True)
         self.setFlat(True)
         self.setCursor(Qt.PointingHandCursor)
@@ -90,14 +95,58 @@ class HeartToggle(QPushButton):
 
     def _refresh(self) -> None:
         filled = self.isChecked()
-        self.setText("♥" if filled else "♡")
         if self._overlay:
             background = "rgba(35, 44, 30, 0.38)"
-            color = _HEART_FILLED if filled else _HEART_EMPTY
+            self._color = _HEART_FILLED if filled else _HEART_EMPTY
         else:
             background = theme.SURFACE
-            color = _HEART_FILLED if filled else theme.INK_FAINT
+            self._color = _HEART_FILLED if filled else theme.INK_FAINT
         self.setStyleSheet(
-            f"border: 1px solid {theme.LINE}; border-radius: 15px; "
-            f"font-size: 15px; background: {background}; color: {color};"
+            f"border: 1px solid {theme.LINE}; border-radius: 15px; background: {background};"
         )
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 (nom imposé par Qt)
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        margin = self.width() * 0.27
+        rect = QRectF(margin, margin, self.width() - 2 * margin, self.height() - 2 * margin)
+        _draw_heart(painter, rect, filled=self.isChecked(), color=QColor(self._color))
+
+
+def _draw_heart(painter: QPainter, rect: QRectF, filled: bool, color: QColor) -> None:
+    """Cœur composé de deux lobes (cercles) et d'une pointe (triangle),
+    réunis en un seul chemin — plus fiable qu'un glyphe de police."""
+
+    w, h = rect.width(), rect.height()
+    lobe_radius = w * 0.28
+    lobe_y = rect.top() + h * 0.32
+    left_x = rect.left() + w * 0.30
+    right_x = rect.left() + w * 0.70
+
+    path = QPainterPath()
+    path.addEllipse(QPointF(left_x, lobe_y), lobe_radius, lobe_radius)
+    right_lobe = QPainterPath()
+    right_lobe.addEllipse(QPointF(right_x, lobe_y), lobe_radius, lobe_radius)
+    path = path.united(right_lobe)
+
+    tip = QPainterPath()
+    tip.addPolygon(
+        QPolygonF(
+            [
+                QPointF(rect.left() + w * 0.04, lobe_y),
+                QPointF(rect.left() + w * 0.5, rect.top() + h * 0.97),
+                QPointF(rect.left() + w * 0.96, lobe_y),
+            ]
+        )
+    )
+    path = path.united(tip)
+
+    if filled:
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(color)
+    else:
+        painter.setPen(QPen(color, max(1.6, w * 0.12)))
+        painter.setBrush(Qt.NoBrush)
+    painter.drawPath(path)
