@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPolygonF
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from desktop import theme
@@ -110,43 +110,77 @@ class HeartToggle(QPushButton):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        margin = self.width() * 0.27
+        margin = self.width() * 0.20
         rect = QRectF(margin, margin, self.width() - 2 * margin, self.height() - 2 * margin)
         _draw_heart(painter, rect, filled=self.isChecked(), color=QColor(self._color))
 
 
-def _draw_heart(painter: QPainter, rect: QRectF, filled: bool, color: QColor) -> None:
-    """Cœur composé de deux lobes (cercles) et d'une pointe (triangle),
-    réunis en un seul chemin — plus fiable qu'un glyphe de police."""
+# Cœur dessiné sur une grille 24x24 (points de contrôle d'un tracé
+# vectoriel classique), mis à l'échelle du rectangle cible à l'usage.
+_HEART_START_24 = (12.0, 21.0)
+_HEART_CURVES_24 = (
+    ((12.0, 21.0), (5.3, 16.65), (2.7, 12.45)),
+    ((1.1, 9.9), (1.9, 6.5), (4.8, 5.1)),
+    ((7.0, 4.05), (9.3, 4.8), (12.0, 7.5)),
+    ((14.7, 4.8), (17.0, 4.05), (19.2, 5.1)),
+    ((22.1, 6.5), (22.9, 9.9), (21.3, 12.45)),
+    ((18.7, 16.65), (12.0, 21.0), (12.0, 21.0)),
+)
+# Une bouchée croquée en haut à droite du creux — le cœur devient liké
+# une fois « croqué », comme on croquerait dans la recette elle-même.
+_BITE_CENTER_24 = (15.5, 4.6)
+_BITE_RADIUS_24 = 2.7
 
-    w, h = rect.width(), rect.height()
-    lobe_radius = w * 0.28
-    lobe_y = rect.top() + h * 0.32
-    left_x = rect.left() + w * 0.30
-    right_x = rect.left() + w * 0.70
+
+def _heart_path(rect: QRectF) -> QPainterPath:
+    scale_x, scale_y = rect.width() / 24.0, rect.height() / 24.0
+
+    def point(x: float, y: float) -> QPointF:
+        return QPointF(rect.left() + x * scale_x, rect.top() + y * scale_y)
 
     path = QPainterPath()
-    path.addEllipse(QPointF(left_x, lobe_y), lobe_radius, lobe_radius)
-    right_lobe = QPainterPath()
-    right_lobe.addEllipse(QPointF(right_x, lobe_y), lobe_radius, lobe_radius)
-    path = path.united(right_lobe)
+    path.moveTo(point(*_HEART_START_24))
+    for control1, control2, end in _HEART_CURVES_24:
+        path.cubicTo(point(*control1), point(*control2), point(*end))
+    path.closeSubpath()
+    return path
 
-    tip = QPainterPath()
-    tip.addPolygon(
-        QPolygonF(
-            [
-                QPointF(rect.left() + w * 0.04, lobe_y),
-                QPointF(rect.left() + w * 0.5, rect.top() + h * 0.97),
-                QPointF(rect.left() + w * 0.96, lobe_y),
-            ]
-        )
-    )
-    path = path.united(tip)
+
+def _draw_heart(painter: QPainter, rect: QRectF, filled: bool, color: QColor) -> None:
+    """Cœur plein avec une bouchée croquée en haut quand il est liké ;
+    simple contour, intact, sinon."""
+
+    heart = _heart_path(rect)
 
     if filled:
+        scale_x, scale_y = rect.width() / 24.0, rect.height() / 24.0
+        bite_center = QPointF(
+            rect.left() + _BITE_CENTER_24[0] * scale_x,
+            rect.top() + _BITE_CENTER_24[1] * scale_y,
+        )
+        bite = QPainterPath()
+        bite.addEllipse(bite_center, _BITE_RADIUS_24 * scale_x, _BITE_RADIUS_24 * scale_y)
+        heart = heart.subtracted(bite)
+
         painter.setPen(Qt.NoPen)
         painter.setBrush(color)
     else:
-        painter.setPen(QPen(color, max(1.6, w * 0.12)))
+        painter.setPen(QPen(color, max(1.6, rect.width() * 0.1)))
         painter.setBrush(Qt.NoBrush)
-    painter.drawPath(path)
+    painter.drawPath(heart)
+
+
+def heart_icon(color: str, size: int = 14, filled: bool = False) -> QIcon:
+    """Petite icône cœur (même tracé vectoriel que `HeartToggle`), pour un
+    usage ailleurs qu'un bouton dédié — ex. le filtre « Favoris » de
+    l'accueil — sans dépendre d'un glyphe Unicode."""
+
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    margin = size * 0.06
+    rect = QRectF(margin, margin, size - 2 * margin, size - 2 * margin)
+    _draw_heart(painter, rect, filled=filled, color=QColor(color))
+    painter.end()
+    return QIcon(pixmap)

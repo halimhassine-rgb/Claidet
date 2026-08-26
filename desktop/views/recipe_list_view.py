@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from desktop import theme
-from desktop.widgets import HeartToggle
+from desktop.widgets import HeartToggle, heart_icon
 from engine.models import Recipe
 
 _ALL_CATEGORIES = "Toutes les catégories"
@@ -264,10 +264,12 @@ class RecipeListView(QWidget):
             self._sort_combo.addItem(label)
         self._sort_combo.currentIndexChanged.connect(self._on_sort_mode_selected)
 
-        self._favorites_button = QPushButton("♥ Favoris")
+        self._favorites_button = QPushButton(" Favoris")
         self._favorites_button.setProperty("variant", "pill")
         self._favorites_button.setCheckable(True)
+        self._favorites_button.setIconSize(QSize(13, 13))
         self._favorites_button.toggled.connect(self._on_favorites_filter_toggled)
+        self._refresh_favorites_button_icon()
 
         self._filter_group = QButtonGroup(self)
         self._filter_group.setExclusive(True)
@@ -347,7 +349,12 @@ class RecipeListView(QWidget):
 
     def _on_favorites_filter_toggled(self, checked: bool) -> None:
         self._favorites_only = checked
+        self._refresh_favorites_button_icon()
         self._render()
+
+    def _refresh_favorites_button_icon(self) -> None:
+        color = theme.SURFACE if self._favorites_button.isChecked() else theme.INK_SOFT
+        self._favorites_button.setIcon(heart_icon(color, size=13, filled=True))
 
     # -- Données -----------------------------------------------------
 
