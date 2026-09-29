@@ -39,6 +39,8 @@ _SORT_MODES = (
     ("manual", "Ordre personnalisé"),
     ("rating_desc", "Note décroissante"),
     ("rating_asc", "Note croissante"),
+    ("calories_asc", "Calories croissantes"),
+    ("calories_desc", "Calories décroissantes"),
 )
 _TITLE_CONTENT_WIDTH = _CARD_WIDTH - 32  # marges gauche/droite du corps de la carte
 
@@ -133,10 +135,23 @@ class _RecipeCard(QFrame):
         body.setContentsMargins(16, 14, 16, 16)
         body.setSpacing(9)
         body.addWidget(title_label)
-        if recipe.rating:
-            rating_label = QLabel(f"★ {recipe.rating}/10")
-            rating_label.setStyleSheet(f"color: {theme.ACCENT}; font-size: 11px; font-weight: 700;")
-            body.addWidget(rating_label)
+        if recipe.rating or recipe.calories:
+            badges_row = QHBoxLayout()
+            badges_row.setSpacing(10)
+            if recipe.rating:
+                rating_label = QLabel(f"★ {recipe.rating}/10")
+                rating_label.setStyleSheet(
+                    f"color: {theme.ACCENT}; font-size: 11px; font-weight: 700;"
+                )
+                badges_row.addWidget(rating_label)
+            if recipe.calories:
+                calories_label = QLabel(f"{recipe.calories} kcal")
+                calories_label.setStyleSheet(
+                    f"color: {theme.ACCENT_DEEP}; font-size: 11px; font-weight: 700;"
+                )
+                badges_row.addWidget(calories_label)
+            badges_row.addStretch(1)
+            body.addLayout(badges_row)
         body.addLayout(meta_row)
 
         outer = QVBoxLayout(self)
@@ -468,6 +483,10 @@ class RecipeListView(QWidget):
             return sorted(self._recipes, key=lambda r: (r.rating is None, -(r.rating or 0)))
         if self._sort_mode == "rating_asc":
             return sorted(self._recipes, key=lambda r: (r.rating is None, r.rating or 0))
+        if self._sort_mode == "calories_asc":
+            return sorted(self._recipes, key=lambda r: (r.calories is None, r.calories or 0))
+        if self._sort_mode == "calories_desc":
+            return sorted(self._recipes, key=lambda r: (r.calories is None, -(r.calories or 0)))
         return self._recipes  # "manual" : déjà dans l'ordre personnalisé (sort_order)
 
     def _render(self) -> None:
