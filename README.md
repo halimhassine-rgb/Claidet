@@ -31,6 +31,20 @@ les retrouver.
 6. **Image de couverture** : la miniature du post si disponible, sinon
    la première image clé extraite.
 
+**Calories** : si un nombre de calories est dit ou écrit dans la vidéo
+(légende, texte incrusté), il est repris tel quel (« indiqué dans la
+vidéo »). Sinon, avec Claude, une estimation est faite à partir des
+ingrédients identifiés (« estimation ») — jamais sans IA, faute d'une
+vraie base nutritionnelle. Toujours affiché avec sa base (par portion
+ou plat entier) et son origine, pour ne jamais laisser un chiffre seul
+induire en erreur ; éditable à la main sur l'écran de relecture.
+Pour les recettes déjà enregistrées avant cette fonctionnalité : une
+recherche gratuite (sans IA) dans leurs notes déjà stockées tourne
+automatiquement au démarrage ; le menu **⋯** de l'accueil propose en
+plus une estimation par IA à partir des ingrédients pour celles qui
+n'ont toujours rien (implique un appel Claude par recette, donc des
+jetons payants — confirmation demandée avant de lancer).
+
 La vidéo source est conservée (pas seulement l'image de couverture) pour
 pouvoir être rejouée depuis la fiche détail — voir la note sur l'espace
 disque dans la Configuration ci-dessous.

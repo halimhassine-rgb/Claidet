@@ -14,6 +14,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QStackedWidget
 
+from desktop.controllers.calories_backfill_worker import CaloriesBackfillWorker
 from desktop.controllers.extraction_worker import ExtractionWorker
 from desktop.views.recipe_detail_view import RecipeDetailView
 from desktop.views.recipe_list_view import RecipeListView
@@ -22,6 +23,7 @@ from desktop.views.url_input_view import UrlInputView
 from engine.config import EngineConfig
 from engine.models import ExtractionResult, Recipe
 from engine.pipeline import ExtractionPipeline
+from engine.recipe_builder import ClaudeRecipeReconstructor, detect_stated_calories
 from storage import backup
 from storage.repository import RecipeRepository
 
@@ -34,7 +36,11 @@ class MainWindow(QMainWindow):
 
         self._repository = repository
         self._pipeline = ExtractionPipeline(config)
+        self._ai_reconstructor = ClaudeRecipeReconstructor(
+            api_key=config.anthropic_api_key, model=config.claude_model
+        )
         self._worker: ExtractionWorker | None = None
+        self._calories_worker: CaloriesBackfillWorker | None = None
 
         self._list_view = RecipeListView()
         self._url_view = UrlInputView()
@@ -50,6 +56,7 @@ class MainWindow(QMainWindow):
         self._list_view.recipe_selected.connect(self._show_detail_view)
         self._list_view.export_requested.connect(self._export_recipes)
         self._list_view.import_requested.connect(self._import_recipes)
+        self._list_view.estimate_calories_requested.connect(self._estimate_missing_calories)
         self._list_view.favorite_toggle_requested.connect(self._repository.set_favorite)
         self._list_view.reorder_requested.connect(self._repository.reorder_recipes)
         self._list_view.category_order_changed.connect(self._repository.set_category_order)
@@ -66,6 +73,12 @@ class MainWindow(QMainWindow):
         self._detail_view.delete_requested.connect(self._delete_recipe)
         self._detail_view.favorite_toggled.connect(self._repository.set_favorite)
         self._detail_view.back_requested.connect(self._show_list_view)
+
+        # Recettes créées avant l'ajout des calories : recherche gratuite
+        # (sans IA) d'une valeur déjà indiquée dans leurs notes, une fois
+        # au démarrage — l'estimation par IA reste, elle, un choix
+        # explicite (menu « ⋯ »), car elle a un coût.
+        self._backfill_stated_calories()
 
         self._show_list_view()
 
@@ -215,3 +228,43 @@ class MainWindow(QMainWindow):
 
         self._show_list_view()
         QMessageBox.information(self, "Import terminé", f"{count} recette(s) importée(s).")
+
+    # -- Calories des recettes existantes --------------------------------
+
+    def _backfill_stated_calories(self) -> None:
+        """Recherche gratuite (regex, pas d'IA) d'un nombre de calories déjà
+        écrit/dit dans les notes des recettes qui n'en ont pas encore."""
+        for recipe in self._repository.list_missing_calories():
+            calories, basis, source = detect_stated_calories(recipe.notes, None)
+            if calories:
+                self._repository.update_calories(recipe.id, calories, basis, source)
+
+    def _estimate_missing_calories(self) -> None:
+        missing = self._repository.list_missing_calories()
+        if not missing:
+            QMessageBox.information(
+                self, "Calories", "Toutes les recettes ont déjà une valeur de calories."
+            )
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Estimer les calories manquantes",
+            f"{len(missing)} recette(s) n'ont pas de calories renseignées.\n\n"
+            "Lancer une estimation par IA à partir de leurs ingrédients "
+            f"({len(missing)} appel(s) à Claude, donc des jetons payants) ?",
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        self._calories_worker = CaloriesBackfillWorker(
+            self._repository, self._ai_reconstructor, [r.id for r in missing]
+        )
+        self._calories_worker.finished_ok.connect(self._on_calories_backfill_finished)
+        self._calories_worker.start()
+
+    def _on_calories_backfill_finished(self, updated: int) -> None:
+        self._show_list_view()
+        QMessageBox.information(
+            self, "Calories", f"{updated} recette(s) mise(s) à jour avec une estimation."
+        )

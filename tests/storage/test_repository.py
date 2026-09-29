@@ -195,3 +195,41 @@ def test_delete_removes_video_file(tmp_path):
     repo.delete(saved.id)
 
     assert not video_path.exists()
+
+
+def test_calories_roundtrip(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    saved = repo.save(
+        _make_recipe(calories=350, calories_basis="per_serving", calories_source="stated")
+    )
+
+    fetched = repo.get(saved.id)
+
+    assert fetched.calories == 350
+    assert fetched.calories_basis == "per_serving"
+    assert fetched.calories_source == "stated"
+
+
+def test_list_missing_calories_excludes_recipes_with_a_value(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    with_calories = repo.save(
+        _make_recipe(title="Avec calories", calories=200, calories_source="manual")
+    )
+    without_calories = repo.save(_make_recipe(title="Sans calories"))
+
+    missing = {r.id for r in repo.list_missing_calories()}
+
+    assert without_calories.id in missing
+    assert with_calories.id not in missing
+
+
+def test_update_calories_persists_the_new_value(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    saved = repo.save(_make_recipe())
+
+    repo.update_calories(saved.id, 275, "total", "estimated")
+
+    fetched = repo.get(saved.id)
+    assert fetched.calories == 275
+    assert fetched.calories_basis == "total"
+    assert fetched.calories_source == "estimated"

@@ -21,6 +21,9 @@ CREATE TABLE IF NOT EXISTS recipes (
     rating INTEGER,
     is_favorite INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    calories INTEGER,
+    calories_basis TEXT,
+    calories_source TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -39,6 +42,9 @@ _MIGRATIONS = (
     "ALTER TABLE recipes ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE recipes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE recipes ADD COLUMN video_path TEXT",
+    "ALTER TABLE recipes ADD COLUMN calories INTEGER",
+    "ALTER TABLE recipes ADD COLUMN calories_basis TEXT",
+    "ALTER TABLE recipes ADD COLUMN calories_source TEXT",
 )
 
 

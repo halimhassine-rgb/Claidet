@@ -3,10 +3,12 @@ import json
 import pytest
 
 from engine.exceptions import RecipeReconstructionError
+from engine.models import Ingredient
 from engine.recipe_builder import (
     ClaudeRecipeReconstructor,
     HeuristicRecipeReconstructor,
     _extract_json,
+    detect_stated_calories,
 )
 
 
@@ -45,6 +47,9 @@ def _valid_payload_text() -> str:
             "ingredients": [{"name": "Pâtes", "quantity": "200 g", "note": None}],
             "steps": ["Cuire les pâtes", "Ajouter le pesto"],
             "notes": None,
+            "calories": 450,
+            "calories_basis": "per_serving",
+            "calories_source": "estimated",
         }
     )
 
@@ -67,6 +72,32 @@ def test_reconstruct_parses_valid_json():
     assert [s.text for s in recipe.steps] == ["Cuire les pâtes", "Ajouter le pesto"]
     assert recipe.extraction_method == "auto"
     assert recipe.source_url == "https://instagram.com/reel/xyz"
+    assert recipe.calories == 450
+    assert recipe.calories_basis == "per_serving"
+    assert recipe.calories_source == "estimated"
+
+
+def test_reconstruct_drops_calories_without_a_source():
+    payload = json.dumps(
+        {
+            "title": "Test",
+            "ingredients": [],
+            "steps": [],
+            "calories": 300,
+            "calories_basis": "total",
+            "calories_source": None,
+        }
+    )
+    reconstructor = ClaudeRecipeReconstructor(api_key="fake", model="claude-sonnet-5")
+    reconstructor._client = _FakeClient(payload)
+
+    recipe = reconstructor.reconstruct(
+        transcript=None, caption=None, frame_paths=[], source_url=None
+    )
+
+    assert recipe.calories is None
+    assert recipe.calories_basis is None
+    assert recipe.calories_source is None
 
 
 def test_reconstruct_raises_on_garbage_response():
@@ -151,3 +182,60 @@ def test_heuristic_reconstruct_never_raises_on_empty_input():
     assert recipe.title == "Recette sans titre"
     assert recipe.ingredients == []
     assert recipe.steps == []
+
+
+def test_heuristic_reconstruct_picks_up_stated_calories_from_caption():
+    caption = "Pâtes au pesto\n350 kcal par portion"
+    reconstructor = HeuristicRecipeReconstructor()
+
+    recipe = reconstructor.reconstruct(
+        transcript=None, caption=caption, frame_paths=[], source_url=None
+    )
+
+    assert recipe.calories == 350
+    assert recipe.calories_basis == "per_serving"
+    assert recipe.calories_source == "stated"
+
+
+def test_detect_stated_calories_finds_total_basis():
+    calories, basis, source = detect_stated_calories(
+        "Un plat gourmand, 1200 calories au total pour toute la recette", None
+    )
+    assert calories == 1200
+    assert basis == "total"
+    assert source == "stated"
+
+
+def test_detect_stated_calories_returns_none_without_a_match():
+    assert detect_stated_calories("Une recette sans aucun chiffre", None) == (None, None, None)
+
+
+def test_detect_stated_calories_prefers_caption_over_transcript():
+    calories, _basis, _source = detect_stated_calories("200 kcal", "500 calories")
+    assert calories == 200
+
+
+def test_estimate_calories_parses_valid_response():
+    reconstructor = ClaudeRecipeReconstructor(api_key="fake", model="claude-sonnet-5")
+    reconstructor._client = _FakeClient(
+        json.dumps({"calories": 420, "calories_basis": "per_serving"})
+    )
+
+    calories, basis = reconstructor.estimate_calories(
+        ingredients=[Ingredient(name="Pâtes", quantity="200 g")], servings="2 personnes"
+    )
+
+    assert calories == 420
+    assert basis == "per_serving"
+
+
+def test_estimate_calories_handles_null_response():
+    reconstructor = ClaudeRecipeReconstructor(api_key="fake", model="claude-sonnet-5")
+    reconstructor._client = _FakeClient(
+        json.dumps({"calories": None, "calories_basis": None})
+    )
+
+    calories, basis = reconstructor.estimate_calories(ingredients=[], servings=None)
+
+    assert calories is None
+    assert basis is None

@@ -34,13 +34,27 @@ Réponds UNIQUEMENT avec un objet JSON, sans texte autour, au format exact :
   "servings": string ou null,
   "ingredients": [{{"name": string, "quantity": string ou null, "note": string ou null}}],
   "steps": [string, ...],
-  "notes": string ou null
+  "notes": string ou null,
+  "calories": nombre entier ou null,
+  "calories_basis": "per_serving" ou "total" ou null,
+  "calories_source": "stated" ou "estimated" ou null
 }}
 Les étapes doivent être dans l'ordre d'exécution, une action par étape.
 Pour "category", choisis de préférence parmi : {", ".join(SUGGESTED_CATEGORIES)} \
 — ou une autre catégorie courte si aucune ne convient. Ce n'est qu'une \
 suggestion que l'utilisateur pourra corriger, ne force pas une catégorie \
 si le contenu est ambigu : mets null dans ce cas.
+Pour les calories : si un nombre de calories est dit à l'oral, écrit dans \
+la légende ou incrusté à l'écran, reprends-le tel quel et mets \
+"calories_source" à "stated". Sinon, estime-les toi-même à partir des \
+ingrédients et quantités identifiés, et mets "calories_source" à \
+"estimated" — ne mets jamais "estimated" sans donner de nombre. Si tu ne \
+peux ni le lire ni l'estimer raisonnablement (ingrédients ou quantités \
+trop incertains), mets "calories" et "calories_source" à null plutôt \
+que d'inventer un chiffre. "calories_basis" précise si le nombre est \
+pour une portion ("per_serving") ou pour le plat entier ("total") — à \
+déduire du contexte (nombre de portions connu, formulation de la \
+source) ; mets null seulement si tu ne peux vraiment pas distinguer.
 Si une information est réellement absente des sources, mets null plutôt \
 que d'inventer."""
 
@@ -119,6 +133,46 @@ class ClaudeRecipeReconstructor:
         payload = _extract_json(raw_text)
         return _payload_to_recipe(payload, source_url=source_url)
 
+    def estimate_calories(
+        self, *, ingredients: list[Ingredient], servings: str | None
+    ) -> tuple[int | None, str | None]:
+        """Estime les calories à partir des seuls ingrédients (pas besoin
+        d'images ni de vidéo) — utilisé pour compléter rétroactivement les
+        recettes déjà enregistrées avant l'ajout des calories."""
+        client = self._get_client()
+
+        ingredients_text = "\n".join(
+            f"- {(i.quantity + ' ') if i.quantity else ''}{i.name}" for i in ingredients
+        )
+        prompt = (
+            f"Ingrédients de la recette :\n{ingredients_text}\n\n"
+            f"Portions : {servings or 'inconnu'}\n\n"
+            'Estime le nombre de calories. Réponds UNIQUEMENT avec un objet JSON : '
+            '{"calories": nombre entier, "calories_basis": "per_serving" ou "total"}. '
+            "Si l'estimation est vraiment impossible (ingrédients insuffisants ou "
+            'trop vagues), réponds {"calories": null, "calories_basis": null} '
+            "plutôt que d'inventer un chiffre."
+        )
+
+        try:
+            response = client.messages.create(
+                model=self._model,
+                max_tokens=200,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except Exception as exc:
+            raise RecipeReconstructionError(f"Échec de l'estimation des calories : {exc}") from exc
+
+        raw_text = "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        )
+        payload = _extract_json(raw_text)
+        calories = payload.get("calories")
+        basis = payload.get("calories_basis")
+        if calories is None:
+            return None, None
+        return int(calories), (basis if basis in ("per_serving", "total") else None)
+
 
 def _encode_image_block(path: Path) -> dict:
     media_type = mimetypes.guess_type(path.name)[0] or "image/jpeg"
@@ -160,6 +214,16 @@ def _payload_to_recipe(payload: dict, *, source_url: str | None) -> Recipe:
     except (KeyError, TypeError) as exc:
         raise RecipeReconstructionError(f"Structure JSON inattendue : {exc}") from exc
 
+    calories = payload.get("calories")
+    calories_basis = payload.get("calories_basis")
+    calories_source = payload.get("calories_source")
+    # Un des trois seul et sans les autres n'a pas de sens : soit les
+    # trois, soit rien plutôt qu'un chiffre affiché sans sa base/origine.
+    if calories is None or calories_source not in ("stated", "estimated"):
+        calories, calories_basis, calories_source = None, None, None
+    elif calories_basis not in ("per_serving", "total"):
+        calories_basis = None
+
     return Recipe(
         source_url=source_url,
         title=title,
@@ -168,6 +232,9 @@ def _payload_to_recipe(payload: dict, *, source_url: str | None) -> Recipe:
         ingredients=ingredients,
         steps=steps,
         notes=payload.get("notes"),
+        calories=calories,
+        calories_basis=calories_basis,
+        calories_source=calories_source,
         extraction_method="auto",
     )
 
@@ -191,6 +258,14 @@ _QUANTITY_LEAD = re.compile(
     re.IGNORECASE,
 )
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+# Détection d'un nombre de calories explicitement écrit/dit — jamais
+# d'estimation sans IA (ça demanderait une vraie base nutritionnelle) :
+# on ne remplit `calories` ici que si la source le donne déjà.
+_CALORIES_PATTERN = re.compile(r"(\d{2,5})\s*(?:k\s*cal(?:orie)?s?|calories?)\b", re.IGNORECASE)
+_PER_SERVING_HINT = re.compile(
+    r"par\s+(?:portion|personne)|/\s*portion|chaque\s+portion", re.IGNORECASE
+)
+_TOTAL_HINT = re.compile(r"\btotal(?:e)?\b|plat\s+entier|pour\s+tout", re.IGNORECASE)
 
 
 class HeuristicRecipeReconstructor:
@@ -214,6 +289,7 @@ class HeuristicRecipeReconstructor:
     ) -> Recipe:
         caption_lines = [line.strip() for line in (caption or "").splitlines() if line.strip()]
         ingredient_lines, other_caption_lines = _split_ingredient_lines(caption_lines)
+        calories, calories_basis, calories_source = detect_stated_calories(caption, transcript)
 
         return Recipe(
             source_url=source_url,
@@ -221,6 +297,9 @@ class HeuristicRecipeReconstructor:
             ingredients=_parse_ingredients(ingredient_lines),
             steps=_guess_steps(transcript, other_caption_lines),
             notes=caption,
+            calories=calories,
+            calories_basis=calories_basis,
+            calories_source=calories_source,
             extraction_method="auto",
         )
 
@@ -263,3 +342,27 @@ def _guess_steps(transcript: str | None, fallback_lines: list[str]) -> list[Step
     source = transcript.strip() if transcript and transcript.strip() else "\n".join(fallback_lines)
     sentences = [s.strip(" -–—") for s in _SENTENCE_SPLIT.split(source) if s.strip(" -–—")]
     return [Step(order=index + 1, text=text) for index, text in enumerate(sentences)]
+
+
+def detect_stated_calories(
+    caption: str | None, transcript: str | None = None
+) -> tuple[int | None, str | None, str | None]:
+    """Repère un nombre de calories déjà écrit/dit dans les sources —
+    sans IA, on ne fait jamais d'estimation nutritionnelle nous-mêmes,
+    ça demanderait une vraie base de données des ingrédients."""
+
+    for text in (caption, transcript):
+        if not text:
+            continue
+        match = _CALORIES_PATTERN.search(text)
+        if not match:
+            continue
+        window = text[max(0, match.start() - 30) : match.end() + 30]
+        if _PER_SERVING_HINT.search(window):
+            basis = "per_serving"
+        elif _TOTAL_HINT.search(window):
+            basis = "total"
+        else:
+            basis = None
+        return int(match.group(1)), basis, "stated"
+    return None, None, None

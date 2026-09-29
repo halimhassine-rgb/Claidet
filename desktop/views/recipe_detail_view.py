@@ -94,18 +94,31 @@ class RecipeDetailView(QWidget):
 
         self._rating_widget = StarRating(editable=False)
 
+        self._calories_badge = QLabel()
+        self._calories_badge.setStyleSheet(
+            f"background:{theme.ACCENT_TINT}; color:{theme.ACCENT_DEEP}; "
+            "border-radius:10px; padding:6px 12px; font-size:13px; font-weight:700;"
+        )
+        self._calories_badge.hide()
+
         meta_row = QHBoxLayout()
         meta_row.setSpacing(12)
         meta_row.addWidget(self._category_pill)
         meta_row.addWidget(self._servings_label)
         meta_row.addStretch(1)
 
+        rating_row = QHBoxLayout()
+        rating_row.setSpacing(14)
+        rating_row.addWidget(self._rating_widget)
+        rating_row.addWidget(self._calories_badge)
+        rating_row.addStretch(1)
+
         title_block = QVBoxLayout()
         title_block.setSpacing(10)
         title_block.addWidget(self._source_link)
         title_block.addWidget(self._title_label)
         title_block.addLayout(meta_row)
-        title_block.addWidget(self._rating_widget)
+        title_block.addLayout(rating_row)
 
         ingredients_label = QLabel("Ingrédients")
         ingredients_label.setProperty("role", "section-label")
@@ -222,6 +235,8 @@ class RecipeDetailView(QWidget):
         self._servings_label.setVisible(bool(recipe.servings))
 
         self._rating_widget.set_rating(recipe.rating)
+        self._calories_badge.setText(_calories_html(recipe))
+        self._calories_badge.setVisible(bool(recipe.calories))
         self._heart_button.blockSignals(True)
         self._heart_button.setChecked(recipe.is_favorite)
         self._heart_button.blockSignals(False)
@@ -295,6 +310,28 @@ class RecipeDetailView(QWidget):
         width = max(self._hero_label.width(), 320)
         size = QSize(width, _HERO_SIZE.height())
         self._hero_label.setPixmap(_hero_pixmap(self._current_recipe, size))
+
+
+_CALORIES_BASIS_LABELS = {"per_serving": " / portion", "total": " au total"}
+_CALORIES_SOURCE_LABELS = {
+    "stated": "indiqué dans la vidéo",
+    "estimated": "estimation",
+    "manual": "saisie manuelle",
+}
+
+
+def _calories_html(recipe: Recipe) -> str:
+    if not recipe.calories:
+        return ""
+    basis = _CALORIES_BASIS_LABELS.get(recipe.calories_basis, "")
+    html = f"{recipe.calories} kcal{basis}"
+    source = _CALORIES_SOURCE_LABELS.get(recipe.calories_source)
+    if source:
+        html += (
+            f'<span style="color:{theme.ACCENT_DEEP}; font-weight:400; font-size:11px;">'
+            f" · {source}</span>"
+        )
+    return html
 
 
 def _hero_pixmap(recipe: Recipe, size: QSize) -> QPixmap:

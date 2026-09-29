@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtGui import QIcon, QIntValidator, QPixmap
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -60,6 +60,11 @@ def _field_label(text: str) -> QLabel:
     label = QLabel(text)
     label.setProperty("role", "section-label")
     return label
+
+
+def _select_combo_data(combo: QComboBox, value) -> None:
+    index = combo.findData(value)
+    combo.setCurrentIndex(index if index >= 0 else 0)
 
 
 class _AutoGrowPlainTextEdit(QPlainTextEdit):
@@ -145,6 +150,23 @@ class RecipeReviewView(QWidget):
         self._category_combo.lineEdit().setPlaceholderText("Aucune, ou tapez la vôtre")
         self._servings_edit = QLineEdit()
         self._servings_edit.setPlaceholderText("ex : 4 personnes")
+
+        self._calories_edit = QLineEdit()
+        self._calories_edit.setPlaceholderText("ex : 350")
+        self._calories_edit.setValidator(QIntValidator(0, 99999, self))
+        self._calories_basis_combo = QComboBox()
+        self._calories_basis_combo.addItem("Non précisé", None)
+        self._calories_basis_combo.addItem("Par portion", "per_serving")
+        self._calories_basis_combo.addItem("Plat entier", "total")
+        self._calories_source_combo = QComboBox()
+        self._calories_source_combo.addItem("Indiqué dans la vidéo", "stated")
+        self._calories_source_combo.addItem("Estimation", "estimated")
+        self._calories_source_combo.addItem("Saisie manuelle", "manual")
+        calories_row = QHBoxLayout()
+        calories_row.setSpacing(8)
+        calories_row.addWidget(self._calories_edit, 1)
+        calories_row.addWidget(self._calories_basis_combo, 1)
+        calories_row.addWidget(self._calories_source_combo, 1)
 
         self._cover_label = QLabel("Pas d'image")
         self._cover_label.setFixedSize(160, 160)
@@ -235,6 +257,8 @@ class RecipeReviewView(QWidget):
         form_col.addWidget(self._category_combo)
         form_col.addWidget(_field_label("Portions"))
         form_col.addWidget(self._servings_edit)
+        form_col.addWidget(_field_label("Calories"))
+        form_col.addLayout(calories_row)
         form_col.addWidget(_field_label("Note"))
         self._rating_widget = StarRating(editable=True)
         form_col.addWidget(self._rating_widget)
@@ -369,6 +393,9 @@ class RecipeReviewView(QWidget):
         self._title_edit.setText(recipe.title)
         self._category_combo.setCurrentText(recipe.category or "")
         self._servings_edit.setText(recipe.servings or "")
+        self._calories_edit.setText(str(recipe.calories) if recipe.calories else "")
+        _select_combo_data(self._calories_basis_combo, recipe.calories_basis)
+        _select_combo_data(self._calories_source_combo, recipe.calories_source or "manual")
         for ingredient in recipe.ingredients:
             self._add_ingredient_row(ingredient.name, ingredient.quantity or "", ingredient.note or "")
         self._steps_edit.setPlainText(
@@ -385,6 +412,9 @@ class RecipeReviewView(QWidget):
         self._title_edit.clear()
         self._category_combo.setCurrentText("")
         self._servings_edit.clear()
+        self._calories_edit.clear()
+        self._calories_basis_combo.setCurrentIndex(0)
+        self._calories_source_combo.setCurrentIndex(2)  # "Saisie manuelle" par défaut
         self._rating_widget.set_rating(0)
         self._ingredients_table.setRowCount(0)
         self._ingredients_table.autosize()
@@ -419,6 +449,8 @@ class RecipeReviewView(QWidget):
         ]
 
         base = self._base_recipe
+        calories_text = self._calories_edit.text().strip()
+        calories = int(calories_text) if calories_text.isdigit() else None
         kwargs = dict(
             title=self._title_edit.text().strip() or "Recette sans titre",
             category=self._category_combo.currentText().strip() or None,
@@ -428,6 +460,9 @@ class RecipeReviewView(QWidget):
             notes=self._notes_edit.toPlainText().strip() or None,
             rating=self._rating_widget.rating(),
             cover_image_path=self._cover_image_path,
+            calories=calories,
+            calories_basis=self._calories_basis_combo.currentData() if calories else None,
+            calories_source=self._calories_source_combo.currentData() if calories else None,
         )
         if base is not None:
             return base.model_copy(update=kwargs)

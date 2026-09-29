@@ -240,6 +240,7 @@ class RecipeListView(QWidget):
     new_recipe_requested = Signal()
     export_requested = Signal()
     import_requested = Signal()
+    estimate_calories_requested = Signal()
     favorite_toggle_requested = Signal(str, bool)  # recipe id, is_favorite
     reorder_requested = Signal(list)  # ids de recette dans le nouvel ordre
     category_order_changed = Signal(list)
@@ -278,6 +279,9 @@ class RecipeListView(QWidget):
         more_menu = QMenu(more_button)
         more_menu.addAction("Exporter mes recettes…", self.export_requested.emit)
         more_menu.addAction("Importer des recettes…", self.import_requested.emit)
+        more_menu.addAction(
+            "Estimer les calories manquantes (IA)…", self.estimate_calories_requested.emit
+        )
         more_button.setMenu(more_menu)
 
         new_button = QPushButton("+  Nouvelle recette")

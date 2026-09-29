@@ -97,6 +97,16 @@ class Recipe(BaseModel):
     # l'accueil) ; attribuée par le stockage à la création, jamais par
     # l'utilisateur directement.
     sort_order: int = 0
+    # Calories : soit indiquées/dites directement dans la vidéo (source
+    # "stated"), soit estimées à partir des ingrédients identifiés
+    # (source "estimated", IA uniquement), soit saisies à la main
+    # (source "manual"). `calories_basis` précise si le nombre est pour
+    # une portion ou pour le plat entier — sans ça, un chiffre seul est
+    # trompeur. Les deux accompagnent toujours `calories`, jamais
+    # affiché sans eux.
+    calories: int | None = Field(default=None, ge=0)
+    calories_basis: Literal["per_serving", "total"] | None = None
+    calories_source: Literal["stated", "estimated", "manual"] | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

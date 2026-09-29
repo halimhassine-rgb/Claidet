@@ -72,8 +72,9 @@ class RecipeRepository:
             INSERT INTO recipes (
                 id, source_url, title, category, servings, ingredients_json,
                 steps_json, notes, cover_image_path, video_path, extraction_method,
-                rating, is_favorite, sort_order, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                rating, is_favorite, sort_order, calories, calories_basis,
+                calories_source, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 source_url=excluded.source_url,
                 title=excluded.title,
@@ -88,6 +89,9 @@ class RecipeRepository:
                 rating=excluded.rating,
                 is_favorite=excluded.is_favorite,
                 sort_order=excluded.sort_order,
+                calories=excluded.calories,
+                calories_basis=excluded.calories_basis,
+                calories_source=excluded.calories_source,
                 updated_at=excluded.updated_at
             """,
             (
@@ -105,6 +109,9 @@ class RecipeRepository:
                 persisted.rating,
                 1 if persisted.is_favorite else 0,
                 persisted.sort_order,
+                persisted.calories,
+                persisted.calories_basis,
+                persisted.calories_source,
                 created_at.isoformat(),
                 persisted.updated_at.isoformat(),
             ),
@@ -142,6 +149,23 @@ class RecipeRepository:
             "SELECT * FROM recipes WHERE source_url = ? LIMIT 1", (source_url,)
         ).fetchone()
         return _row_to_recipe(row) if row is not None else None
+
+    def list_missing_calories(self) -> list[Recipe]:
+        """Recettes sans calories enregistrées — pour la recherche/
+        estimation rétroactive sur les recettes créées avant cette
+        fonctionnalité."""
+        rows = self._conn.execute("SELECT * FROM recipes WHERE calories IS NULL").fetchall()
+        return [_row_to_recipe(row) for row in rows]
+
+    def update_calories(
+        self, recipe_id: str, calories: int, calories_basis: str | None, calories_source: str
+    ) -> None:
+        self._conn.execute(
+            "UPDATE recipes SET calories = ?, calories_basis = ?, calories_source = ?, "
+            "updated_at = ? WHERE id = ?",
+            (calories, calories_basis, calories_source, datetime.now(timezone.utc).isoformat(), recipe_id),
+        )
+        self._conn.commit()
 
     def delete(self, recipe_id: str) -> None:
         recipe = self.get(recipe_id)
@@ -256,6 +280,9 @@ def _row_to_recipe(row: sqlite3.Row) -> Recipe:
         rating=row["rating"],
         is_favorite=bool(row["is_favorite"]),
         sort_order=row["sort_order"],
+        calories=row["calories"],
+        calories_basis=row["calories_basis"],
+        calories_source=row["calories_source"],
         created_at=datetime.fromisoformat(row["created_at"]),
         updated_at=datetime.fromisoformat(row["updated_at"]),
     )
