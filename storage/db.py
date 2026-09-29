@@ -50,7 +50,12 @@ _MIGRATIONS = (
 
 def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    # check_same_thread=False : le dépôt est aussi utilisé depuis des
+    # QThread en arrière-plan (ex. estimation des calories manquantes),
+    # jamais en parallèle du thread principal — sans ça, sqlite3 refuse
+    # silencieusement toute requête faite hors du thread de création,
+    # ce qui faisait échouer la tâche sans aucune erreur visible.
+    conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(_SCHEMA)

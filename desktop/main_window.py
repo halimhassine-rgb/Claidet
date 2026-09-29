@@ -12,7 +12,14 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox, QStackedWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QProgressDialog,
+    QStackedWidget,
+)
 
 from desktop.controllers.calories_backfill_worker import CaloriesBackfillWorker
 from desktop.controllers.extraction_worker import ExtractionWorker
@@ -41,6 +48,7 @@ class MainWindow(QMainWindow):
         )
         self._worker: ExtractionWorker | None = None
         self._calories_worker: CaloriesBackfillWorker | None = None
+        self._calories_progress: QProgressDialog | None = None
 
         self._list_view = RecipeListView()
         self._url_view = UrlInputView()
@@ -257,13 +265,23 @@ class MainWindow(QMainWindow):
         if confirm != QMessageBox.Yes:
             return
 
+        self._calories_progress = QProgressDialog(
+            "Estimation des calories en cours…", None, 0, len(missing), self
+        )
+        self._calories_progress.setWindowTitle("Calories")
+        self._calories_progress.setWindowModality(Qt.WindowModal)
+        self._calories_progress.setMinimumDuration(0)
+        self._calories_progress.setValue(0)
+
         self._calories_worker = CaloriesBackfillWorker(
             self._repository, self._ai_reconstructor, [r.id for r in missing]
         )
+        self._calories_worker.progress.connect(self._calories_progress.setValue)
         self._calories_worker.finished_ok.connect(self._on_calories_backfill_finished)
         self._calories_worker.start()
 
     def _on_calories_backfill_finished(self, updated: int) -> None:
+        self._calories_progress.close()
         self._show_list_view()
         QMessageBox.information(
             self, "Calories", f"{updated} recette(s) mise(s) à jour avec une estimation."
