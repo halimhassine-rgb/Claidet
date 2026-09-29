@@ -133,11 +133,24 @@ ordinateur : exporter sur l'ancien poste, transférer le fichier (clé
 USB, cloud, email), puis importer sur le nouveau. L'archive peut être
 volumineuse (vidéos incluses). Réimporter une archive déjà importée met à
 jour les recettes existantes plutôt que de les dupliquer (`storage/backup.py`).
+La clé `ANTHROPIC_API_KEY` ne fait pas partie de l'export (voir
+Configuration ci-dessous) : à recréer une fois sur le nouveau poste,
+dans `~/.reelicious/.env`.
 
 ## Configuration
 
 Variables d'environnement (toutes optionnelles sauf `ANTHROPIC_API_KEY`
-pour l'extraction automatique) :
+pour l'extraction automatique), à mettre dans un fichier `.env` :
+
+- en développement (lancé depuis le code source), un `.env` à la
+  racine du projet fonctionne (voir `.env.example`) ;
+- pour l'exécutable empaqueté (`.exe`/`.app`), c'est **`~/.reelicious/.env`**
+  qu'il faut utiliser — le `.env` du projet source n'est pas embarqué
+  dans l'exécutable et ne le suit pas une fois copié sur un autre
+  poste ou lancé depuis un raccourci Bureau. Créez le fichier une
+  fois avec juste la ligne `ANTHROPIC_API_KEY=...` ; les deux
+  emplacements peuvent coexister, celui de `~/.reelicious` est
+  prioritaire.
 
 | Variable | Défaut | Rôle |
 |---|---|---|

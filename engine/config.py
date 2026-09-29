@@ -12,11 +12,21 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 
 def _default_data_dir() -> Path:
     return Path.home() / ".reelicious"
+
+
+# Chargé dans cet ordre précis : d'abord l'emplacement fixe
+# (~/.reelicious/.env), qui fonctionne quel que soit l'endroit où
+# l'exécutable est lancé (raccourci Bureau, dossier copié sur un autre
+# poste...) — un `.env` à côté du code source ne suit pas l'exécutable
+# une fois l'application empaquetée. Le `.env` à la racine du projet
+# reste supporté en secours (`load_dotenv()` sans argument, override=
+# False par défaut : ne remplace rien de déjà chargé), pour le confort
+# du développement lancé depuis le code source.
+load_dotenv(_default_data_dir() / ".env")
+load_dotenv()
 
 
 @dataclass(frozen=True)
