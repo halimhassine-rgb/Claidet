@@ -192,6 +192,9 @@ class MainWindow(QMainWindow):
             self, "Supprimer la recette", "Supprimer définitivement cette recette ?"
         )
         if confirm == QMessageBox.Yes:
+            # Arrêter la vidéo avant de supprimer : sinon son fichier reste
+            # verrouillé (lecteur encore chargé) et la suppression échoue.
+            self._detail_view.stop_video()
             self._repository.delete(recipe_id)
             self._show_list_view()
 

@@ -171,14 +171,24 @@ class RecipeRepository:
         recipe = self.get(recipe_id)
         self._conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
         self._conn.commit()
+        # La suppression en base est déjà actée à ce stade : un fichier
+        # encore verrouillé (ex. vidéo en cours de lecture) ne doit jamais
+        # faire échouer la suppression de la recette elle-même, juste
+        # laisser un fichier orphelin qu'on ne peut pas nettoyer maintenant.
         if recipe and recipe.cover_image_path and self._covers_dir is not None:
             cover = Path(recipe.cover_image_path)
             if self._covers_dir in cover.parents:
-                cover.unlink(missing_ok=True)
+                try:
+                    cover.unlink(missing_ok=True)
+                except OSError:
+                    pass
         if recipe and recipe.video_path and self._videos_dir is not None:
             video = Path(recipe.video_path)
             if self._videos_dir in video.parents:
-                video.unlink(missing_ok=True)
+                try:
+                    video.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def set_favorite(self, recipe_id: str, is_favorite: bool) -> None:
         self._conn.execute(

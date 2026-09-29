@@ -233,3 +233,25 @@ def test_update_calories_persists_the_new_value(tmp_path):
     assert fetched.calories == 275
     assert fetched.calories_basis == "total"
     assert fetched.calories_source == "estimated"
+
+
+def test_delete_removes_recipe_even_if_video_file_is_locked(tmp_path, monkeypatch):
+    """Un fichier vidéo verrouillé (lecteur encore ouvert dessus, sous
+    Windows) ne doit jamais empêcher la suppression de la recette elle-même,
+    seulement laisser le fichier orphelin sur disque."""
+    source_video = tmp_path / "video_src.mp4"
+    source_video.write_bytes(b"data")
+    videos_dir = tmp_path / "videos"
+    repo = RecipeRepository(
+        tmp_path / "db.sqlite", covers_dir=tmp_path / "covers", videos_dir=videos_dir
+    )
+    saved = repo.save(_make_recipe(video_path=str(source_video)))
+
+    def _raise_permission_error(self, *args, **kwargs):
+        raise PermissionError("fichier verrouillé")
+
+    monkeypatch.setattr(Path, "unlink", _raise_permission_error)
+
+    repo.delete(saved.id)  # ne doit pas lever d'exception
+
+    assert repo.get(saved.id) is None
