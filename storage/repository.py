@@ -142,6 +142,17 @@ class RecipeRepository:
         ).fetchall()
         return [row["category"] for row in rows]
 
+    def rename_category(self, old_name: str, new_name: str) -> int:
+        """Renomme une catégorie sur toutes les recettes qui l'utilisent
+        (ex. corriger « Plat » en « Plats »). Renvoie le nombre de recettes
+        concernées."""
+        cursor = self._conn.execute(
+            "UPDATE recipes SET category = ?, updated_at = ? WHERE category = ?",
+            (new_name, datetime.now(timezone.utc).isoformat(), old_name),
+        )
+        self._conn.commit()
+        return cursor.rowcount
+
     def find_by_source_url(self, source_url: str) -> Recipe | None:
         """Recherche une recette déjà enregistrée pour ce même lien source
         (utilisé pour avertir avant de ré-extraire un reel déjà importé)."""

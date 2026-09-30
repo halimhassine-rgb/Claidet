@@ -256,6 +256,7 @@ class RecipeListView(QWidget):
     export_requested = Signal()
     import_requested = Signal()
     estimate_calories_requested = Signal()
+    rename_category_requested = Signal()
     favorite_toggle_requested = Signal(str, bool)  # recipe id, is_favorite
     reorder_requested = Signal(list)  # ids de recette dans le nouvel ordre
     category_order_changed = Signal(list)
@@ -297,6 +298,7 @@ class RecipeListView(QWidget):
         more_menu.addAction(
             "Estimer les calories manquantes (IA)…", self.estimate_calories_requested.emit
         )
+        more_menu.addAction("Renommer une catégorie…", self.rename_category_requested.emit)
         more_button.setMenu(more_menu)
 
         new_button = QPushButton("+  Nouvelle recette")

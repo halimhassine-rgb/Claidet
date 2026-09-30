@@ -26,6 +26,7 @@ from desktop.controllers.extraction_worker import ExtractionWorker
 from desktop.views.recipe_detail_view import RecipeDetailView
 from desktop.views.recipe_list_view import RecipeListView
 from desktop.views.recipe_review_view import RecipeReviewView
+from desktop.views.rename_category_dialog import RenameCategoryDialog
 from desktop.views.url_input_view import UrlInputView
 from engine.config import EngineConfig
 from engine.models import ExtractionResult, Recipe
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self._list_view.export_requested.connect(self._export_recipes)
         self._list_view.import_requested.connect(self._import_recipes)
         self._list_view.estimate_calories_requested.connect(self._estimate_missing_calories)
+        self._list_view.rename_category_requested.connect(self._rename_category)
         self._list_view.favorite_toggle_requested.connect(self._repository.set_favorite)
         self._list_view.reorder_requested.connect(self._repository.reorder_recipes)
         self._list_view.category_order_changed.connect(self._repository.set_category_order)
@@ -289,3 +291,33 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self, "Calories", f"{updated} recette(s) mise(s) à jour avec une estimation."
         )
+
+    # -- Catégories -------------------------------------------------------
+
+    def _rename_category(self) -> None:
+        categories = self._repository.list_categories()
+        if not categories:
+            QMessageBox.information(
+                self, "Catégories", "Aucune catégorie n'est encore utilisée."
+            )
+            return
+
+        dialog = RenameCategoryDialog(categories, self)
+        if dialog.exec() != RenameCategoryDialog.Accepted:
+            return
+
+        old_name = dialog.selected_category()
+        new_name = dialog.new_name()
+        if not new_name or new_name == old_name:
+            return
+
+        self._repository.rename_category(old_name, new_name)
+
+        # Garde la même place dans l'ordre des pastilles plutôt que de la
+        # faire réapparaître à la fin comme une catégorie « nouvelle ».
+        order = self._repository.get_category_order()
+        if old_name in order:
+            order = [new_name if c == old_name else c for c in order]
+            self._repository.set_category_order(order)
+
+        self._show_list_view()

@@ -15,19 +15,20 @@ les retrouver.
    affichés plutôt que dits).
 4. **Transcription** de l'audio en local avec `faster-whisper` (aucun
    appel réseau à cette étape).
-5. **Reconstruction de la recette**, au choix sur l'écran d'extraction :
+5. **Reconstruction de la recette**, au choix sur l'écran d'extraction
+   (case « Utiliser Claude (IA) », cochée par défaut) :
    - *Avec Claude (IA)* : un seul appel multimodal (texte + images)
      combine transcript, légende et images clés pour produire un JSON
      structuré (titre, portions, ingrédients, étapes). Payant (jetons
      API), plus précis — notamment pour lire le texte incrusté dans les
      images.
-   - *Sans IA (gratuit)* : reconstruction par règles locales
-     (`HeuristicRecipeReconstructor`), qui s'appuie sur les légendes déjà
-     structurées (listes à puces, quantités visibles) et découpe la
-     transcription en étapes phrase par phrase. Moins fiable, mais
-     gratuit et instantané. Depuis l'écran de relecture, si le résultat
-     ne convient pas, un bouton permet de relancer directement avec
-     Claude sans tout retaper.
+   - *Sans IA (gratuit)*, en décochant la case : reconstruction par
+     règles locales (`HeuristicRecipeReconstructor`), qui s'appuie sur
+     les légendes déjà structurées (listes à puces, quantités visibles)
+     et découpe la transcription en étapes phrase par phrase. Moins
+     fiable, mais gratuit et instantané. Depuis l'écran de relecture,
+     si le résultat ne convient pas, un bouton permet de relancer
+     directement avec Claude sans tout retaper.
 6. **Image de couverture** : la miniature du post si disponible, sinon
    la première image clé extraite.
 

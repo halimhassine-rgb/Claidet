@@ -33,9 +33,11 @@ class UrlInputView(QWidget):
         self._manual_button.setProperty("variant", "secondary")
 
         self._use_ai_checkbox = QCheckBox("Utiliser Claude (IA) pour cette extraction")
+        self._use_ai_checkbox.setChecked(True)
         ai_hint = QLabel(
-            "Décochée : extraction gratuite par règles simples, à vérifier — "
-            "vous pourrez relancer avec Claude ensuite si besoin."
+            "Cochée par défaut (plus précis, jetons payants). Décochez-la pour une "
+            "extraction gratuite par règles simples, à vérifier — vous pourrez "
+            "relancer avec Claude ensuite si besoin."
         )
         ai_hint.setProperty("role", "faint")
         ai_hint.setWordWrap(True)
@@ -114,5 +116,5 @@ class UrlInputView(QWidget):
 
     def reset(self) -> None:
         self._url_edit.clear()
-        self._use_ai_checkbox.setChecked(False)
+        self._use_ai_checkbox.setChecked(True)
         self.set_busy(False)

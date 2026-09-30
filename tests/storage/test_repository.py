@@ -255,3 +255,18 @@ def test_delete_removes_recipe_even_if_video_file_is_locked(tmp_path, monkeypatc
     repo.delete(saved.id)  # ne doit pas lever d'exception
 
     assert repo.get(saved.id) is None
+
+
+def test_rename_category_updates_all_matching_recipes(tmp_path):
+    repo = RecipeRepository(tmp_path / "db.sqlite", covers_dir=tmp_path / "covers")
+    first = repo.save(_make_recipe(title="Poulet rôti", category="Plat"))
+    second = repo.save(_make_recipe(title="Pâtes carbonara", category="Plat"))
+    untouched = repo.save(_make_recipe(title="Tiramisu", category="Dessert"))
+
+    updated_count = repo.rename_category("Plat", "Plats")
+
+    assert updated_count == 2
+    assert repo.get(first.id).category == "Plats"
+    assert repo.get(second.id).category == "Plats"
+    assert repo.get(untouched.id).category == "Dessert"
+    assert repo.list_categories() == ["Dessert", "Plats"]
