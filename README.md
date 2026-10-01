@@ -68,14 +68,15 @@ desktop/    application de bureau (PySide6). Seul consommateur de engine+storage
 tests/      tests de engine/ et storage/
 ```
 
-Cette séparation existe pour une raison précise : une version mobile
-avec serveur est prévue. Ce jour-là, un serveur (FastAPI ou autre)
-importera directement `engine` et `storage` sans rien réécrire — il
-remplacera `desktop` comme second consommateur, exactement comme
-`desktop` est aujourd'hui le premier. `engine` et `storage` ne
-connaissent d'ailleurs rien l'un de l'autre : c'est `storage` qui va
-chercher les fichiers produits par `engine` (image de couverture) pour
-les rendre durables, jamais l'inverse.
+Cette séparation facilite la réutilisation par d'autres consommateurs que
+`desktop` — c'est le cas de la version mobile (voir `mobile/`), qui
+réutilise directement certaines parties de `engine` (le téléchargement
+via yt-dlp, embarqué sur le téléphone ; le prompt de reconstruction
+Claude, repris tel quel) sans passer par un serveur : l'appli Android
+tourne entièrement en local, comme l'appli de bureau. `engine` et
+`storage` ne connaissent d'ailleurs rien l'un de l'autre : c'est
+`storage` qui va chercher les fichiers produits par `engine` (image de
+couverture) pour les rendre durables, jamais l'inverse.
 
 À l'intérieur de `engine`, chaque étape (téléchargement, transcription,
 reconstruction LLM) est définie derrière une interface (`Protocol`)
