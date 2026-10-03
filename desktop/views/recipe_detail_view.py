@@ -55,18 +55,10 @@ class RecipeDetailView(QWidget):
         self._heart_button = HeartToggle(overlay=False)
         self._heart_button.toggled.connect(self._on_favorite_toggled)
 
-        edit_button = QPushButton("Modifier")
-        edit_button.setProperty("variant", "secondary")
-        edit_button.clicked.connect(lambda: self.edit_requested.emit(self._recipe_id))
-        delete_button = QPushButton("Supprimer")
-        delete_button.setProperty("variant", "danger-ghost")
-        delete_button.clicked.connect(lambda: self.delete_requested.emit(self._recipe_id))
-
         # Volontairement seul à droite : le réflexe (comme pour fermer une
-        # fenêtre) est d'aller cliquer en haut à droite. Y laisser
-        # Modifier/Supprimer expose à un clic de suppression par
-        # réflexe — ce bouton de retour y est donc seul, et Modifier/
-        # Supprimer passent à gauche.
+        # fenêtre) est d'aller cliquer en haut à droite. Modifier/
+        # Supprimer sont en bas à gauche de la fenêtre (barre persistante,
+        # voir plus bas), loin de ce réflexe de fermeture.
         close_button = QPushButton("✕")
         close_button.setProperty("variant", "ghost")
         close_button.setFixedSize(36, 36)
@@ -75,11 +67,34 @@ class RecipeDetailView(QWidget):
         close_button.clicked.connect(self.back_requested.emit)
 
         header = QHBoxLayout()
-        header.addWidget(edit_button)
-        header.addWidget(delete_button)
         header.addWidget(self._heart_button)
         header.addStretch(1)
         header.addWidget(close_button)
+
+        edit_button = QPushButton("Modifier")
+        edit_button.setProperty("variant", "secondary")
+        edit_button.clicked.connect(lambda: self.edit_requested.emit(self._recipe_id))
+        delete_button = QPushButton("Supprimer")
+        delete_button.setProperty("variant", "danger-ghost")
+        delete_button.clicked.connect(lambda: self.delete_requested.emit(self._recipe_id))
+
+        # Barre persistante en bas à gauche de la *fenêtre* (hors de la
+        # zone de défilement) : reste accessible sans avoir à remonter en
+        # haut de la fiche, quelle que soit la longueur de la recette.
+        footer = QHBoxLayout()
+        footer.setContentsMargins(32, 14, 32, 14)
+        footer.setSpacing(12)
+        footer.addWidget(edit_button)
+        footer.addWidget(delete_button)
+        footer.addStretch(1)
+        self._footer_bar = QWidget()
+        self._footer_bar.setProperty("role", "detail-footer")
+        self._footer_bar.setAttribute(Qt.WA_StyledBackground, True)
+        self._footer_bar.setStyleSheet(
+            f"QWidget[role='detail-footer'] {{ background: {theme.SURFACE}; "
+            f"border-top: 1px solid {theme.LINE}; }}"
+        )
+        self._footer_bar.setLayout(footer)
 
         self._current_recipe: Recipe | None = None
         self._hero_label = QLabel()
@@ -244,7 +259,9 @@ class RecipeDetailView(QWidget):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(scroll)
+        outer.setSpacing(0)
+        outer.addWidget(scroll, 1)
+        outer.addWidget(self._footer_bar)
 
     def load_recipe(self, recipe: Recipe) -> None:
         self._video_player.stop()
