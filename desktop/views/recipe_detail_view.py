@@ -57,8 +57,9 @@ class RecipeDetailView(QWidget):
 
         # Volontairement seul à droite : le réflexe (comme pour fermer une
         # fenêtre) est d'aller cliquer en haut à droite. Modifier/
-        # Supprimer sont en bas à gauche de la fenêtre (barre persistante,
-        # voir plus bas), loin de ce réflexe de fermeture.
+        # Supprimer sont en bas à droite de la fenêtre (barre persistante,
+        # voir plus bas) — un autre coin, donc pas de confusion avec ce
+        # réflexe de fermeture situé en haut.
         close_button = QPushButton("✕")
         close_button.setProperty("variant", "ghost")
         close_button.setFixedSize(36, 36)
@@ -78,15 +79,15 @@ class RecipeDetailView(QWidget):
         delete_button.setProperty("variant", "danger-ghost")
         delete_button.clicked.connect(lambda: self.delete_requested.emit(self._recipe_id))
 
-        # Barre persistante en bas à gauche de la *fenêtre* (hors de la
+        # Barre persistante en bas à droite de la *fenêtre* (hors de la
         # zone de défilement) : reste accessible sans avoir à remonter en
         # haut de la fiche, quelle que soit la longueur de la recette.
         footer = QHBoxLayout()
         footer.setContentsMargins(32, 14, 32, 14)
         footer.setSpacing(12)
+        footer.addStretch(1)
         footer.addWidget(edit_button)
         footer.addWidget(delete_button)
-        footer.addStretch(1)
         self._footer_bar = QWidget()
         self._footer_bar.setProperty("role", "detail-footer")
         self._footer_bar.setAttribute(Qt.WA_StyledBackground, True)
