@@ -45,10 +45,6 @@ class RecipeDetailView(QWidget):
         super().__init__(parent)
         self._recipe_id: str | None = None
 
-        back_button = QPushButton("←  Mes recettes")
-        back_button.setProperty("variant", "ghost")
-        back_button.clicked.connect(self.back_requested.emit)
-
         self._heart_button = HeartToggle(overlay=False)
         self._heart_button.toggled.connect(self._on_favorite_toggled)
 
@@ -59,12 +55,24 @@ class RecipeDetailView(QWidget):
         delete_button.setProperty("variant", "danger-ghost")
         delete_button.clicked.connect(lambda: self.delete_requested.emit(self._recipe_id))
 
+        # Volontairement seul à droite : le réflexe (comme pour fermer une
+        # fenêtre) est d'aller cliquer en haut à droite. Y laisser
+        # Modifier/Supprimer expose à un clic de suppression par
+        # réflexe — ce bouton de retour y est donc seul, et Modifier/
+        # Supprimer passent à gauche.
+        close_button = QPushButton("✕")
+        close_button.setProperty("variant", "ghost")
+        close_button.setFixedSize(36, 36)
+        close_button.setStyleSheet("font-size: 16px;")
+        close_button.setToolTip("Retour à mes recettes")
+        close_button.clicked.connect(self.back_requested.emit)
+
         header = QHBoxLayout()
-        header.addWidget(back_button)
-        header.addStretch(1)
-        header.addWidget(self._heart_button)
         header.addWidget(edit_button)
         header.addWidget(delete_button)
+        header.addWidget(self._heart_button)
+        header.addStretch(1)
+        header.addWidget(close_button)
 
         self._current_recipe: Recipe | None = None
         self._hero_label = QLabel()
