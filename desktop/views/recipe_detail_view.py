@@ -22,9 +22,17 @@ from desktop.video_player import VideoPlayer
 from desktop.widgets import HeartToggle, StarRating
 from engine.models import Recipe
 
-_HERO_SIZE = QSize(920, 280)
 _BODY_MAX_WIDTH = 1200
 _STEP_BADGE = 34
+# Les reels sont filmés au format téléphone (portrait, 9:16) : la photo/
+# vidéo de couverture suit ce ratio plutôt qu'un cadre large et bas, sans
+# quoi une vidéo portrait ne remplit qu'une mince bande verticale au
+# milieu d'un cadre très majoritairement vide. La largeur (donc la
+# hauteur, qui en découle par ce ratio) grandit avec la fenêtre, jusqu'à
+# ce maximum.
+_HERO_ASPECT_RATIO = 16 / 9  # hauteur / largeur
+_HERO_MAX_WIDTH = 480
+_HERO_MIN_WIDTH = 320
 
 
 class RecipeDetailView(QWidget):
@@ -60,7 +68,6 @@ class RecipeDetailView(QWidget):
 
         self._current_recipe: Recipe | None = None
         self._hero_label = QLabel()
-        self._hero_label.setFixedHeight(_HERO_SIZE.height())
         self._hero_label.setAlignment(Qt.AlignCenter)
 
         self._video_player = VideoPlayer()
@@ -75,7 +82,6 @@ class RecipeDetailView(QWidget):
         self._hero_stack.addWidget(self._video_player)
         self._hero_container = QWidget()
         self._hero_container.setLayout(self._hero_stack)
-        self._hero_container.setFixedHeight(_HERO_SIZE.height())
 
         self._title_label = QLabel()
         self._title_label.setProperty("role", "detail-title")
@@ -295,20 +301,17 @@ class RecipeDetailView(QWidget):
         # façon fiable à l'intérieur d'une QScrollArea ici : on calcule
         # donc explicitement la largeur de chaque bloc à chaque
         # redimensionnement plutôt que de compter sur les stretch factors.
-        available = max(self.width() - 80, 320)
-        self._hero_wrap.setFixedWidth(min(available, _HERO_SIZE.width()))
+        available = max(self.width() - 80, _HERO_MIN_WIDTH)
+        hero_width = min(available, _HERO_MAX_WIDTH)
+        hero_height = round(hero_width * _HERO_ASPECT_RATIO)
+        self._hero_wrap.setFixedWidth(hero_width)
+        self._hero_container.setFixedSize(hero_width, hero_height)
         self._body_wrap.setFixedWidth(min(available, _BODY_MAX_WIDTH))
-        self._refresh_hero()
+        self._refresh_hero(QSize(hero_width, hero_height))
 
-    def _refresh_hero(self) -> None:
+    def _refresh_hero(self, size: QSize) -> None:
         if self._current_recipe is None:
             return
-        # Régénérée à la largeur réelle du label (et non une largeur fixe
-        # devinée à l'avance) : sur certains systèmes (résolutions
-        # d'écran/mise à l'échelle variées), une taille figée pouvait ne
-        # pas correspondre à l'espace réellement disponible.
-        width = max(self._hero_label.width(), 320)
-        size = QSize(width, _HERO_SIZE.height())
         self._hero_label.setPixmap(_hero_pixmap(self._current_recipe, size))
 
 
