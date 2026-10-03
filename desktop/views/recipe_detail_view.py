@@ -195,17 +195,15 @@ class RecipeDetailView(QWidget):
         notes_layout.addWidget(self._notes_text)
 
         # Format téléphone assumé jusqu'au bout : la vidéo/photo reste à
-        # gauche (avec son titre juste dessous) plutôt que centrée seule
-        # au-dessus de tout le reste, et ingrédients/étapes viennent à
-        # côté, à droite — pour profiter de la largeur de l'écran au lieu
-        # d'empiler verticalement une colonne étroite.
-        hero_and_title = QVBoxLayout()
-        hero_and_title.setSpacing(28)
-        hero_and_title.addWidget(self._hero_container)
-        hero_and_title.addLayout(title_block)
-        hero_and_title.addStretch(1)
+        # gauche, haute et étroite comme un téléphone, et ingrédients/
+        # étapes viennent à côté, à droite. Le titre passe au-dessus des
+        # deux colonnes plutôt que sous la photo : une photo haute aurait
+        # sinon repoussé le titre sous le pli, hors champ sans défiler.
+        hero_only = QVBoxLayout()
+        hero_only.addWidget(self._hero_container)
+        hero_only.addStretch(1)
         self._hero_wrap = QWidget()
-        self._hero_wrap.setLayout(hero_and_title)
+        self._hero_wrap.setLayout(hero_only)
 
         right_content = QVBoxLayout()
         right_content.setSpacing(28)
@@ -216,11 +214,16 @@ class RecipeDetailView(QWidget):
         right_wrap.setLayout(right_content)
 
         main_row = QHBoxLayout()
-        main_row.setSpacing(40)
+        main_row.setSpacing(_MAIN_SPACING)
         main_row.addWidget(self._hero_wrap)
         main_row.addWidget(right_wrap, 1)
+
+        content_col = QVBoxLayout()
+        content_col.setSpacing(24)
+        content_col.addLayout(title_block)
+        content_col.addLayout(main_row)
         self._body_wrap = QWidget()
-        self._body_wrap.setLayout(main_row)
+        self._body_wrap.setLayout(content_col)
 
         body_row_centered = QHBoxLayout()
         body_row_centered.addStretch(1)
