@@ -71,6 +71,9 @@ class VideoPlayer(QWidget):
     def load(self, path: str) -> None:
         self._player.setSource(QUrl.fromLocalFile(path))
 
+    def pause(self) -> None:
+        self._player.pause()
+
     def stop(self) -> None:
         # setSource(QUrl()) et pas seulement stop() : sinon le lecteur garde
         # la vidéo « chargée » et le fichier reste ouvert (verrouillé sous

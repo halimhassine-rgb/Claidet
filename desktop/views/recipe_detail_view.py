@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
+    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -33,6 +34,12 @@ _STEP_BADGE = 34
 _HERO_ASPECT_RATIO = 16 / 9  # hauteur / largeur
 _HERO_MAX_WIDTH = 480
 _HERO_MIN_WIDTH = 320
+_MAIN_SPACING = 40
+# Largeur minimale garantie à la colonne ingrédients/étapes, pour qu'elle
+# ne soit jamais écrasée par la vidéo quand la fenêtre est étroite :
+# la vidéo rétrécit en premier (jusqu'à _HERO_MIN_WIDTH) plutôt que
+# l'inverse, car on peut déjà l'agrandir via le bouton "Agrandir".
+_RIGHT_MIN_WIDTH = 480
 
 
 class RecipeDetailView(QWidget):
@@ -90,6 +97,18 @@ class RecipeDetailView(QWidget):
         self._hero_stack.addWidget(self._video_player)
         self._hero_container = QWidget()
         self._hero_container.setLayout(self._hero_stack)
+
+        # Positionné à la main par-dessus la photo/vidéo (même procédé que
+        # le cœur favori sur les cartes de l'accueil) plutôt que dans le
+        # QStackedLayout, pour rester visible quel que soit le widget
+        # affiché (photo ou vidéo).
+        self._expand_button = QPushButton("Agrandir", parent=self._hero_container)
+        self._expand_button.setStyleSheet(
+            "background: rgba(0, 0, 0, 160); color: white; border: none; "
+            "border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600;"
+        )
+        self._expand_button.clicked.connect(self._open_fullscreen)
+        self._expand_button.adjustSize()
 
         self._title_label = QLabel()
         self._title_label.setProperty("role", "detail-title")
@@ -175,28 +194,33 @@ class RecipeDetailView(QWidget):
         notes_layout.addWidget(notes_label)
         notes_layout.addWidget(self._notes_text)
 
-        # La photo (et le bloc titre juste dessous) garde une largeur de
-        # lecture confortable ; les ingrédients/étapes n'ont pas besoin de
-        # s'y aligner et profitent d'un cadre plus large, centré sous la
-        # photo, pour donner aux étapes autant de place qu'aux ingrédients.
+        # Format téléphone assumé jusqu'au bout : la vidéo/photo reste à
+        # gauche (avec son titre juste dessous) plutôt que centrée seule
+        # au-dessus de tout le reste, et ingrédients/étapes viennent à
+        # côté, à droite — pour profiter de la largeur de l'écran au lieu
+        # d'empiler verticalement une colonne étroite.
         hero_and_title = QVBoxLayout()
         hero_and_title.setSpacing(28)
         hero_and_title.addWidget(self._hero_container)
         hero_and_title.addLayout(title_block)
+        hero_and_title.addStretch(1)
         self._hero_wrap = QWidget()
         self._hero_wrap.setLayout(hero_and_title)
 
-        hero_row = QHBoxLayout()
-        hero_row.addStretch(1)
-        hero_row.addWidget(self._hero_wrap)
-        hero_row.addStretch(1)
+        right_content = QVBoxLayout()
+        right_content.setSpacing(28)
+        right_content.addLayout(body_row)
+        right_content.addWidget(self._notes_frame)
+        right_content.addStretch(1)
+        right_wrap = QWidget()
+        right_wrap.setLayout(right_content)
 
-        body_content = QVBoxLayout()
-        body_content.setSpacing(28)
-        body_content.addLayout(body_row)
-        body_content.addWidget(self._notes_frame)
+        main_row = QHBoxLayout()
+        main_row.setSpacing(40)
+        main_row.addWidget(self._hero_wrap)
+        main_row.addWidget(right_wrap, 1)
         self._body_wrap = QWidget()
-        self._body_wrap.setLayout(body_content)
+        self._body_wrap.setLayout(main_row)
 
         body_row_centered = QHBoxLayout()
         body_row_centered.addStretch(1)
@@ -208,7 +232,6 @@ class RecipeDetailView(QWidget):
         scroll_layout.setContentsMargins(32, 24, 32, 32)
         scroll_layout.setSpacing(28)
         scroll_layout.addLayout(header)
-        scroll_layout.addLayout(hero_row)
         scroll_layout.addLayout(body_row_centered)
 
         scroll = QScrollArea()
@@ -292,6 +315,46 @@ class RecipeDetailView(QWidget):
         arrière-plan."""
         self._video_player.stop()
 
+    def _open_fullscreen(self) -> None:
+        recipe = self._current_recipe
+        if recipe is None:
+            return
+
+        screen = self.screen()
+        available = screen.availableGeometry() if screen else QSize(1280, 800)
+        max_height = round(available.height() * 0.9)
+        max_width = round(available.width() * 0.9)
+        height = max_height
+        width = round(height / _HERO_ASPECT_RATIO)
+        if width > max_width:
+            width = max_width
+            height = round(width * _HERO_ASPECT_RATIO)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(recipe.title)
+        dialog.resize(width, height)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        video_path = Path(recipe.video_path) if recipe.video_path else None
+        if video_path and video_path.exists():
+            # Un second lecteur dédié à la fenêtre agrandie plutôt que de
+            # déplacer le lecteur existant hors du QStackedLayout qui le
+            # gère : plus simple et plus robuste. On met en pause le petit
+            # lecteur pour ne pas entendre le son des deux à la fois.
+            self._video_player.pause()
+            big_player = VideoPlayer()
+            layout.addWidget(big_player)
+            big_player.load(str(video_path))
+            dialog.exec()
+            big_player.stop()
+        else:
+            label = QLabel()
+            label.setAlignment(Qt.AlignCenter)
+            label.setPixmap(_hero_pixmap(recipe, QSize(width, height)))
+            layout.addWidget(label)
+            dialog.exec()
+
     def _open_source(self, url: str) -> None:
         QDesktopServices.openUrl(url)
 
@@ -309,12 +372,20 @@ class RecipeDetailView(QWidget):
         # façon fiable à l'intérieur d'une QScrollArea ici : on calcule
         # donc explicitement la largeur de chaque bloc à chaque
         # redimensionnement plutôt que de compter sur les stretch factors.
-        available = max(self.width() - 80, _HERO_MIN_WIDTH)
-        hero_width = min(available, _HERO_MAX_WIDTH)
+        floor = _HERO_MIN_WIDTH + _MAIN_SPACING + _RIGHT_MIN_WIDTH
+        available = max(self.width() - 80, floor)
+        total_width = min(available, _BODY_MAX_WIDTH)
+        hero_width = min(
+            _HERO_MAX_WIDTH,
+            max(_HERO_MIN_WIDTH, total_width - _MAIN_SPACING - _RIGHT_MIN_WIDTH),
+        )
         hero_height = round(hero_width * _HERO_ASPECT_RATIO)
         self._hero_wrap.setFixedWidth(hero_width)
         self._hero_container.setFixedSize(hero_width, hero_height)
-        self._body_wrap.setFixedWidth(min(available, _BODY_MAX_WIDTH))
+        self._expand_button.move(
+            hero_width - self._expand_button.width() - 10, 10
+        )
+        self._body_wrap.setFixedWidth(total_width)
         self._refresh_hero(QSize(hero_width, hero_height))
 
     def _refresh_hero(self, size: QSize) -> None:
